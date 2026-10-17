@@ -21,7 +21,6 @@ import { ProjectRole } from "../../../src/resources/project/enums/project-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -70,7 +69,6 @@ describe('GraphQL label (e2e)', () => {
             providers: [
                 ProjectService,
                 UserService,
-                ObjectValidationService,
                 LoggerService,
                 { provide: CacheService, useValue: mockCacheService },
             ],
@@ -124,7 +122,7 @@ describe('GraphQL label (e2e)', () => {
 
         ownerCookie = await login(owner.email);
 
-        const createProjectDto: CreateProjectDto = { name: 'GraphQL Label Test Project', description: 'For label GraphQL e2e tests.' };
+        const createProjectDto: CreateProjectDto = { name: 'GQL Label Test Project', description: 'For label GraphQL e2e tests.' };
         const createRes = await request(app.getHttpServer())
             .post('/project')
             .send(createProjectDto)
@@ -200,6 +198,29 @@ describe('GraphQL label (e2e)', () => {
 
             expect(response.status).toBe(HttpStatus.OK);
             expect(response.body.errors[0].message).toBe(RETURN_MESSAGES.FORBIDDEN.INSUFFICIENT_PROJECT_ROLE);
+        });
+
+        // The GraphQL schema only knows `color: String!`; the format rule comes from the DTO via the global ValidationPipe.
+        it('should return a BadRequest error for a color that is not #rrggbb', async () => {
+            const mutation = `
+                mutation createLabel($input: CreateLabelDto!) {
+                    createLabel(input: $input) { id }
+                }
+            `;
+            const variables = { input: { projectId, name: 'frontend', color: 'blue' } };
+
+            const response = await request(app.getHttpServer())
+                .post('/graphql')
+                .send({ query: mutation, variables })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.OK);
+            expect(response.body.errors[0].extensions.originalError).toEqual({
+                statusCode: HttpStatus.BAD_REQUEST,
+                message: ['color must be a hex color in the format #rrggbb'],
+                error: 'Bad Request',
+            });
+            expect(response.body.data).toBeNull();
         });
 
     });

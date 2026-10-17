@@ -16,7 +16,6 @@ import { AuthService } from 'src/auth/auth.service';
 import { IssueService } from 'src/resources/issue/issue.service';
 import { LabelService } from 'src/resources/label/label.service';
 import { CommentService } from 'src/resources/comment/comment.service';
-import { ObjectValidationService } from '../object-validation/object-validation.service';
 import { EmailService } from '../email/email.service';
 import { TokenService } from '../token/token.service';
 import { ResetPasswordService } from 'src/auth/reset-password/reset-password.service';
@@ -88,7 +87,6 @@ describe('SeedService', () => {
         IssueService,
         LabelService,
         CommentService,
-        ObjectValidationService,
         LoggerService,
         { provide: EmailService, useValue: mockEmailService },
         TokenService,

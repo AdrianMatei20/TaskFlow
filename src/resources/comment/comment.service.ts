@@ -14,7 +14,6 @@ import { GlobalRole } from 'src/resources/user/enums/global-role';
 
 import { IssueService } from 'src/resources/issue/issue.service';
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 
 import { LOG_CONTEXTS } from 'src/constants/log-contexts';
@@ -30,7 +29,6 @@ export class CommentService {
     @InjectRepository(Comment) private commentRepository: Repository<Comment>,
     private readonly issueService: IssueService,
     private readonly userService: UserService,
-    private readonly objectValidationService: ObjectValidationService,
     private readonly loggerService: LoggerService,
   ) { }
 
@@ -47,19 +45,6 @@ export class CommentService {
     // Reuses IssueService's own validation: invalid/missing issue id, issue not found, and
     // the "must be a project member" check already matches what commenting requires.
     const issue: Issue = await this.issueService.findOneById(createCommentDto.issueId, userId);
-
-    const missingProperties: string[] = this.objectValidationService.getMissingPropertiesForCreateCommentDto(createCommentDto);
-    if (missingProperties.length > 0) {
-      await this.loggerService.warn(
-        LOG_MESSAGES.COMMENT.CREATE.MISSING_PROPS(missingProperties),
-        LOG_CONTEXTS.CommentService.create,
-        { createCommentDto, userId },
-      );
-      throw new BadRequestException({
-        statusCode: HttpStatus.BAD_REQUEST,
-        message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(missingProperties),
-      });
-    }
 
     try {
       const author: User = await this.userService.findOneById(userId);
@@ -143,19 +128,6 @@ export class CommentService {
       throw new NotFoundException({
         statusCode: HttpStatus.NOT_FOUND,
         message: RETURN_MESSAGES.NOT_FOUND.COMMENT,
-      });
-    }
-
-    const missingProperties: string[] = this.objectValidationService.getMissingPropertiesForUpdateCommentDto(updateCommentDto);
-    if (missingProperties.length > 0) {
-      await this.loggerService.warn(
-        LOG_MESSAGES.COMMENT.CREATE.MISSING_PROPS(missingProperties),
-        LOG_CONTEXTS.CommentService.update,
-        { commentId, updateCommentDto, userId },
-      );
-      throw new BadRequestException({
-        statusCode: HttpStatus.BAD_REQUEST,
-        message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(missingProperties),
       });
     }
 

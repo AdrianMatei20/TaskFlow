@@ -20,7 +20,6 @@ import { ResetPassword } from "../../../src/auth/reset-password/reset-password.e
 import { Log } from "../../../src/logger/entities/log.entity";
 
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 import { EmailService } from "../../../src/services/email/email.service";
 import { ResetPasswordService } from "../../../src/auth/reset-password/reset-password.service";
@@ -35,7 +34,6 @@ import request from 'supertest';
 import session from "express-session";
 import { JwtService } from "@nestjs/jwt";
 import { hash } from 'bcrypt';
-import { SimpleMessageDto } from "src/shared/utils/simple-message.dto";
 
 describe('AuthController (e2e)', () => {
     let app: INestApplication;
@@ -64,7 +62,6 @@ describe('AuthController (e2e)', () => {
                 AuthService,
                 UserService,
                 { provide: EmailService, useValue: mockEmailService },
-                ObjectValidationService,
                 JwtService,
                 ResetPasswordService,
                 LoggerService,
@@ -125,16 +122,21 @@ describe('AuthController (e2e)', () => {
     describe('/auth/register (POST)', () => {
 
         it('should return BadRequest for empty body', async () => {
-            const simpleMessageDto: SimpleMessageDto = {
-                statusCode: HttpStatus.BAD_REQUEST,
-                message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS("firstname,lastname,email,password,passwordConfirmation"),
-            };
-
             return await request(app.getHttpServer())
                 .post('/auth/register')
                 .send(emptyRegisterUserDto)
                 .expect(HttpStatus.BAD_REQUEST)
-                .expect(simpleMessageDto);
+                .expect({
+                    statusCode: HttpStatus.BAD_REQUEST,
+                    message: [
+                        'firstname must be a string',
+                        'lastname must be a string',
+                        'email must be an email',
+                        'password must be a string',
+                        'passwordConfirmation must be a string',
+                    ],
+                    error: 'Bad Request',
+                });
         });
 
         it('should return BadRequest for missing firstname', async () => {
@@ -144,7 +146,10 @@ describe('AuthController (e2e)', () => {
                 .expect(HttpStatus.BAD_REQUEST)
                 .expect({
                     statusCode: HttpStatus.BAD_REQUEST,
-                    message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS("firstname"),
+                    message: [
+                        'firstname must be a string',
+                    ],
+                    error: 'Bad Request',
                 });
         });
 
@@ -155,7 +160,10 @@ describe('AuthController (e2e)', () => {
                 .expect(HttpStatus.BAD_REQUEST)
                 .expect({
                     statusCode: HttpStatus.BAD_REQUEST,
-                    message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS("lastname"),
+                    message: [
+                        'lastname must be a string',
+                    ],
+                    error: 'Bad Request',
                 });
         });
 
@@ -166,7 +174,10 @@ describe('AuthController (e2e)', () => {
                 .expect(HttpStatus.BAD_REQUEST)
                 .expect({
                     statusCode: HttpStatus.BAD_REQUEST,
-                    message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS("email"),
+                    message: [
+                        'email must be an email',
+                    ],
+                    error: 'Bad Request',
                 });
         });
 
@@ -177,7 +188,10 @@ describe('AuthController (e2e)', () => {
                 .expect(HttpStatus.BAD_REQUEST)
                 .expect({
                     statusCode: HttpStatus.BAD_REQUEST,
-                    message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS("password"),
+                    message: [
+                        'password must be a string',
+                    ],
+                    error: 'Bad Request',
                 });
         });
 
@@ -188,7 +202,25 @@ describe('AuthController (e2e)', () => {
                 .expect(HttpStatus.BAD_REQUEST)
                 .expect({
                     statusCode: HttpStatus.BAD_REQUEST,
-                    message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS("passwordConfirmation"),
+                    message: [
+                        'passwordConfirmation must be a string',
+                    ],
+                    error: 'Bad Request',
+                });
+        });
+
+        it('should return BadRequest for an invalid email and a too-short password', async () => {
+            return await request(app.getHttpServer())
+                .post('/auth/register')
+                .send({ ...getJamesSmithRegisterUserDto(), email: 'not-an-email', password: 'short', passwordConfirmation: 'short' })
+                .expect(HttpStatus.BAD_REQUEST)
+                .expect({
+                    statusCode: HttpStatus.BAD_REQUEST,
+                    message: [
+                        'email must be an email',
+                        'password must be longer than or equal to 8 characters',
+                    ],
+                    error: 'Bad Request',
                 });
         });
 

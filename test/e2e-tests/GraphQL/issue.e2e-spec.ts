@@ -21,7 +21,6 @@ import { ProjectRole } from "../../../src/resources/project/enums/project-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -70,7 +69,6 @@ describe('GraphQL issue (e2e)', () => {
             providers: [
                 ProjectService,
                 UserService,
-                ObjectValidationService,
                 LoggerService,
                 { provide: CacheService, useValue: mockCacheService },
             ],
@@ -124,7 +122,7 @@ describe('GraphQL issue (e2e)', () => {
 
         ownerCookie = await login(owner.email);
 
-        const createProjectDto: CreateProjectDto = { name: 'GraphQL Issue Test Project', description: 'For issue GraphQL e2e tests.' };
+        const createProjectDto: CreateProjectDto = { name: 'GQL Issue Test Project', description: 'For issue GraphQL e2e tests.' };
         const createRes = await request(app.getHttpServer())
             .post('/project')
             .send(createProjectDto)
@@ -220,6 +218,29 @@ describe('GraphQL issue (e2e)', () => {
 
             expect(response.status).toBe(HttpStatus.OK);
             expect(response.body.errors[0].message).toBe(RETURN_MESSAGES.UNAUTHORIZED);
+            expect(response.body.data).toBeNull();
+        });
+
+        // `projectId: ID!` and `title: String!` satisfy the GraphQL schema; the UUID/empty rules come from the ValidationPipe.
+        it('should return a BadRequest error for input that passes the schema but fails DTO validation', async () => {
+            const mutation = `
+                mutation createIssue($input: CreateIssueDto!) {
+                    createIssue(input: $input) { id }
+                }
+            `;
+            const variables = { input: { projectId: 'not-a-uuid', title: '', description: 'Desc' } };
+
+            const response = await request(app.getHttpServer())
+                .post('/graphql')
+                .send({ query: mutation, variables })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.OK);
+            expect(response.body.errors[0].extensions.originalError).toEqual({
+                statusCode: HttpStatus.BAD_REQUEST,
+                message: ['projectId must be a UUID', 'title should not be empty'],
+                error: 'Bad Request',
+            });
             expect(response.body.data).toBeNull();
         });
 

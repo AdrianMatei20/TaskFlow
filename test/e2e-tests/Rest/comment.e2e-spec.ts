@@ -21,7 +21,6 @@ import { ProjectRole } from "../../../src/resources/project/enums/project-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -73,7 +72,6 @@ describe('CommentController (e2e)', () => {
             providers: [
                 ProjectService,
                 UserService,
-                ObjectValidationService,
                 LoggerService,
                 { provide: CacheService, useValue: mockCacheService },
             ],
@@ -203,7 +201,7 @@ describe('CommentController (e2e)', () => {
                 .set('Cookie', editorCookie);
 
             expect(response.status).toBe(HttpStatus.BAD_REQUEST);
-            expect(response.body.message).toBe(RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['body']));
+            expect(response.body.message).toEqual(['body must be a string']);
         });
 
     });

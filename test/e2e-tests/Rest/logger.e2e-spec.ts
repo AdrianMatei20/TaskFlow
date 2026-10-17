@@ -21,11 +21,12 @@ import { GlobalRole } from "../../../src/resources/user/enums/global-role";
 
 import { LoggerService } from "../../../src/logger/logger.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { ResetPasswordService } from "../../../src/auth/reset-password/reset-password.service";
 import { TokenService } from "../../../src/services/token/token.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
+import { LOG_CONTEXTS } from "../../../src/constants/log-contexts";
+import { LOG_MESSAGES } from "../../../src/constants/log-messages";
 import { getJamesSmithRegisterUserDto } from "../../data/register-user";
 
 import * as dotenv from 'dotenv';
@@ -64,7 +65,6 @@ describe('LoggerController (e2e)', () => {
             providers: [
                 LoggerService,
                 UserService,
-                ObjectValidationService,
                 ResetPasswordService,
                 TokenService,
                 JwtService,
@@ -516,6 +516,44 @@ describe('LoggerController (e2e)', () => {
             const contexts = response.body.data.map((log) => log.context);
             const isAscending = contexts.every((ctx, i, arr) => i === 0 || arr[i - 1].localeCompare(ctx) <= 0);
             expect(isAscending).toBe(true);
+        });
+
+    });
+
+    describe('ValidationPipe logging', () => {
+
+        // The pipe writes its log row without awaiting it (exceptionFactory is synchronous), so poll briefly.
+        const findValidationLog = async (): Promise<Log | null> => {
+            for (let attempt = 0; attempt < 20; attempt++) {
+                const log = await loggerRepository.findOne({ where: { context: LOG_CONTEXTS.ValidationPipe } });
+                if (log) return log;
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+            return null;
+        };
+
+        it('should log a WARN entry for an invalid body without logging submitted values', async () => {
+            await request(app.getHttpServer())
+                .post('/auth/register')
+                .send({ firstname: 'Adrian', lastname: 'Matei', email: 'not-an-email', password: 'secret1', passwordConfirmation: 'secret1' })
+                .expect(HttpStatus.BAD_REQUEST);
+
+            const log = await findValidationLog();
+
+            expect(log).not.toBeNull();
+            expect(log.level).toBe('WARN');
+            expect(log.message).toBe(LOG_MESSAGES.VALIDATION.FAILED('RegisterUserDto', ['email', 'password']));
+
+            const metadata = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : log.metadata;
+            expect(metadata).toEqual({
+                dto: 'RegisterUserDto',
+                failures: [
+                    { property: 'email', constraints: ['isEmail'] },
+                    { property: 'password', constraints: ['minLength'] },
+                ],
+            });
+            expect(JSON.stringify(log)).not.toContain('secret1');
+            expect(JSON.stringify(log)).not.toContain('not-an-email');
         });
 
     });

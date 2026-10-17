@@ -22,7 +22,6 @@ import { ProjectRole } from "../../../src/resources/project/enums/project-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -69,7 +68,6 @@ describe('ProjectController (e2e)', () => {
             providers: [
                 ProjectService,
                 UserService,
-                ObjectValidationService,
                 LoggerService,
                 {
                     provide: CacheService,
@@ -311,7 +309,26 @@ describe('ProjectController (e2e)', () => {
 
             expect(response.status).toBe(HttpStatus.BAD_REQUEST);
             expect(response.body.statusCode).toBe(HttpStatus.BAD_REQUEST);
-            expect(response.body.message).toBe(RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['name', 'description']));
+            expect(response.body.message).toEqual(['name must be a string', 'description must be a string']);
+        });
+
+        // Postgres would reject a name longer than the 25-char column with a 500; the pipe turns it into a 400.
+        it('should return 400 BadRequest for a name longer than the column allows', async () => {
+            const loginResponse = await request(app.getHttpServer())
+                .post('/auth/login')
+                .send(logInRegularUserDto)
+                .expect(HttpStatus.CREATED);
+
+            const cookie = loginResponse.headers['set-cookie'];
+
+            const response = await request(app.getHttpServer())
+                .post('/project')
+                .send({ name: 'x'.repeat(26), description: 'Too long a name.' })
+                .set('Cookie', cookie);
+
+            expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+            expect(response.body.message).toEqual(['name must be shorter than or equal to 25 characters']);
+            expect(await projectRepository.count()).toBe(0);
         });
 
     });

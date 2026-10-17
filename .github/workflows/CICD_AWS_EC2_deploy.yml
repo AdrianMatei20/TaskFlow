@@ -64,7 +64,7 @@ jobs:
             # Clone or update the repo
             cd ~
             if [ ! -d "nestjs-app" ]; then
-              git clone https://github.com/AdrianMatei20/NestJsAPI.git nestjs-app
+              git clone https://github.com/AdrianMatei20/TaskFlow.git nestjs-app
             fi
 
             cd nestjs-app

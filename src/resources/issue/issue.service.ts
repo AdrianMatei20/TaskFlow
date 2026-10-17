@@ -15,7 +15,6 @@ import { GlobalRole } from 'src/resources/user/enums/global-role';
 
 import { ProjectService } from 'src/resources/project/project.service';
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 
 import { LOG_CONTEXTS } from 'src/constants/log-contexts';
@@ -32,7 +31,6 @@ export class IssueService {
     @InjectRepository(Label) private labelRepository: Repository<Label>,
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
-    private readonly objectValidationService: ObjectValidationService,
     private readonly loggerService: LoggerService,
   ) { }
 
@@ -60,20 +58,6 @@ export class IssueService {
   async create(createIssueDto: CreateIssueDto, userId: string): Promise<Issue> {
     // Check if the project exists (also validates the project id is a UUID).
     const project: Project = await this.projectService.findOneById(createIssueDto.projectId);
-
-    // Check if request body is valid
-    const missingProperties: string[] = this.objectValidationService.getMissingPropertiesForCreateIssueDto(createIssueDto);
-    if (missingProperties.length > 0) {
-      await this.loggerService.warn(
-        LOG_MESSAGES.ISSUE.CREATE.MISSING_PROPS(missingProperties),
-        LOG_CONTEXTS.IssueService.create,
-        { createIssueDto, userId },
-      );
-      throw new BadRequestException({
-        statusCode: HttpStatus.BAD_REQUEST,
-        message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(missingProperties),
-      });
-    }
 
     const reporter: User = await this.userService.findOneById(userId);
 

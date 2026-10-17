@@ -6,7 +6,7 @@ GraphQL endpoints are not included here — use the built-in GraphQL Playground 
 
 ## Setup
 
-1. Import `NestJsAPI.postman_collection.json` into Postman.
+1. Import `TaskFlow.postman_collection.json` into Postman.
 2. Open the collection, go to its **Variables** tab, and fill in the "Current value" column for `adminEmail` / `adminPassword` / `defaultEmail` / `defaultPassword` with the seeded credentials from your local `.env` (`ADMIN_USER_EMAIL`, `DEFAULT_USER_EMAIL`, `DEFAULT_PASSWORD`). **Never commit real values into these fields** — they ship blank on purpose. Everything else the collection needs (base URL, seeded test emails, throwaway ids) is already filled in as collection variables, so no separate environment is required.
 3. Start the app (`npm run start:dev`, or via `docker-compose up`), then run requests against `{{baseUrl}}` (defaults to `http://localhost:3001`, also editable in the Variables tab).
 
@@ -37,6 +37,22 @@ Seeding also deterministically creates 4 labels (`bug`, `frontend`, `backend`, `
 - **Issue / Label**: creating or updating requires an OWNER, ADMIN, or EDITOR project role; deleting requires OWNER or ADMIN. A global admin bypasses project membership entirely.
 - **Comment**: any project member — including VIEWER — may create one (reuses `IssueService`'s own "must be a project member" check, since that's exactly what commenting requires). Editing or deleting a comment is restricted to its own author or a project OWNER/ADMIN.
 - Seeding only creates OWNER + EDITOR relationships, so no seeded account has a VIEWER role by default. That's enough for the "Delete issue/label - 403" requests (the seeded **editor** genuinely lacks delete rights), but the "Create/Update issue/label - 403" requests need a VIEWER specifically, since EDITOR *can* create/update — those requests' descriptions call this out and need a manually-assigned VIEWER to actually demonstrate.
+
+## Validation (bad data) requests
+
+Request bodies are validated by a global `ValidationPipe` using the `class-validator` rules on each DTO. A rejected body returns 400 with one message per invalid field:
+
+```json
+{ "statusCode": 400, "message": ["projectId must be a UUID", "title should not be empty"], "error": "Bad Request" }
+```
+
+Each folder has requests that send bad data on purpose: wrong types, malformed emails/UUIDs/dates/colors, unknown enum values, values longer than their database column, and `null` on fields that can't be cleared. Their test scripts check the exact `message` array, so the Tests tab shows which rule fired. A few requests show *where* validation happens in the request lifecycle:
+
+- **Guards run before validation.** "Login - 401 malformed email" and "Update project - 403 invalid body on a project you can't edit" send invalid bodies but get 401/403, because the auth/role guard rejects the request before the pipe runs.
+- **Validation runs before the handler.** "Update comment - 400 body too long (validated before lookup)" targets a comment that doesn't exist, yet returns 400, not 404: the body is rejected before the controller ever looks the comment up.
+- **Unknown fields are stripped, not rejected.** "Create issue - unknown fields are stripped" sends `status: "DONE"` and a fake `createdAt`; both are dropped (`whitelist: true`), so the issue is created as `TODO`. Note that this one creates a real issue in Project Phoenix.
+
+Validation failures are also written to the log table: run **Logger > "Get logs - filter by level"** (`WARN`) afterwards and look for the `ValidationPipe` context. Only the property and rule names are logged, never the submitted values.
 
 ## Other requests that need manual values
 

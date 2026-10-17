@@ -14,7 +14,6 @@ import { User } from '../user/entities/user.entity';
 import { ProjectRole } from './enums/project-role';
 
 import { UserService } from '../user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 import { CacheService } from 'src/cache/cache.service';
 
@@ -29,7 +28,6 @@ export class ProjectService {
     @InjectRepository(Project) private projectRepository: Repository<Project>,
     @InjectRepository(UserProjectRole) private userProjectRoleRepository: Repository<UserProjectRole>,
     private readonly userService: UserService,
-    private readonly objectValidationService: ObjectValidationService,
     private readonly loggerService: LoggerService,
     private readonly cacheService: CacheService,
   ) { }
@@ -73,20 +71,6 @@ export class ProjectService {
       throw new NotFoundException({
         statusCode: HttpStatus.NOT_FOUND,
         message: RETURN_MESSAGES.NOT_FOUND.USER,
-      });
-    }
-
-    // Check if request body is valid
-    const missingProperties: string[] = this.objectValidationService.getMissingPropertiesForCreateProjectDto(createProjectDto);
-    if (missingProperties.length > 0) {
-      await this.loggerService.warn(
-        LOG_MESSAGES.PROJECT.CREATE.MISSING_PROPS(missingProperties),
-        LOG_CONTEXTS.ProjectService.create,
-        { createProjectDto, userId },
-      );
-      throw new BadRequestException({
-        statusCode: HttpStatus.BAD_REQUEST,
-        message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(missingProperties),
       });
     }
 
@@ -329,8 +313,8 @@ export class ProjectService {
       });
     }
 
-    // Check if request body is valid
-    const missingProperties: string[] = this.objectValidationService.getMissingPropertiesForUpdateProjectDto(updateProjectDto);
+    // Check that at least one field was provided (per-field rules are enforced by the global ValidationPipe)
+    const missingProperties: string[] = ['name', 'description'].filter((key) => updateProjectDto[key] === undefined);
     if (missingProperties.length === 2) {
       await this.loggerService.warn(
         LOG_MESSAGES.PROJECT.UPDATE.MISSING_PROPS(project.name, missingProperties),

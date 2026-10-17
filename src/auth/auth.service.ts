@@ -3,7 +3,6 @@ import { validate as isValidUUID } from 'uuid';
 import { compare, hash } from 'bcrypt';
 
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { EmailService } from 'src/services/email/email.service';
 import { TokenService } from 'src/services/token/token.service';
 import { ResetPasswordService } from './reset-password/reset-password.service';
@@ -28,7 +27,6 @@ export class AuthService {
 
   constructor(
     private readonly userService: UserService,
-    private readonly objectValidationService: ObjectValidationService,
     private readonly emailService: EmailService,
     private readonly tokenService: TokenService,
     private readonly resetPasswordService: ResetPasswordService,
@@ -63,20 +61,6 @@ export class AuthService {
       password: password ? '[REDACTED]' : undefined,
       passwordConfirmation: passwordConfirmation ? '[REDACTED]' : undefined,
     };
-
-    // Check if request body is valid
-    const missingProperties = this.objectValidationService.getMissingPropertiesForRegisterUserDto(registerUserDto);
-    if (missingProperties.length > 0) {
-      await this.loggerService.warn(
-        LOG_MESSAGES.AUTH.REGISTER_USER.MISSING_PROPS(missingProperties),
-        LOG_CONTEXTS.AuthService.registerUser,
-        { registerUserDto: sanitizedRegisterUserDto },
-      );
-      throw new BadRequestException({
-        statusCode: HttpStatus.BAD_REQUEST,
-        message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(missingProperties),
-      });
-    }
 
     // Check if user email already exists
     if (await this.userService.findOneByEmail(registerUserDto.email)) {

@@ -41,8 +41,8 @@ async function bootstrap() {
 
   // Swagger
   const config = new DocumentBuilder()
-    .setTitle('NestJS API')
-    .setDescription('nestjs api')
+    .setTitle('TaskFlow API')
+    .setDescription('REST API for TaskFlow, a Jira-like project tracker built with NestJS.')
     .setVersion('1.0')
     .build();
 

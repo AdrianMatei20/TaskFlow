@@ -21,7 +21,6 @@ import { ProjectRole } from "../../../src/resources/project/enums/project-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -71,7 +70,6 @@ describe('LabelController (e2e)', () => {
             providers: [
                 ProjectService,
                 UserService,
-                ObjectValidationService,
                 LoggerService,
                 { provide: CacheService, useValue: mockCacheService },
             ],
@@ -193,7 +191,17 @@ describe('LabelController (e2e)', () => {
                 .set('Cookie', editorCookie);
 
             expect(response.status).toBe(HttpStatus.BAD_REQUEST);
-            expect(response.body.message).toBe(RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['color']));
+            expect(response.body.message).toEqual(['color must be a string']);
+        });
+
+        it('should return 400 BadRequest for a color that is not #rrggbb', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/label')
+                .send({ projectId, name: 'frontend', color: '#fff' })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+            expect(response.body.message).toEqual(['color must be a hex color in the format #rrggbb']);
         });
 
     });
@@ -248,6 +256,25 @@ describe('LabelController (e2e)', () => {
                 .set('Cookie', viewerCookie);
 
             expect(response.status).toBe(HttpStatus.FORBIDDEN);
+        });
+
+        it('should return 400 BadRequest for invalid values', async () => {
+            const createRes = await request(app.getHttpServer())
+                .post('/label')
+                .send({ projectId, name: 'frontend', color: '#3b82f6' })
+                .set('Cookie', editorCookie);
+            const labelId = createRes.body.data.id;
+
+            const response = await request(app.getHttpServer())
+                .patch(`/label/${labelId}`)
+                .send({ name: 'x'.repeat(51), color: 'blue' })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+            expect(response.body.message).toEqual([
+                'name must be shorter than or equal to 50 characters',
+                'color must be a hex color in the format #rrggbb',
+            ]);
         });
 
     });
