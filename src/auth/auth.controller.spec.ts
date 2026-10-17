@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { EmailService } from 'src/services/email/email.service';
 import { TokenService } from 'src/services/token/token.service';
 import { ResetPasswordService } from './reset-password/reset-password.service';
@@ -37,7 +36,6 @@ describe('AuthController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
-        ObjectValidationService,
         TokenService,
         JwtService,
         {

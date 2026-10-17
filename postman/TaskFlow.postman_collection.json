@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "4133f15a-2b02-4fa8-b4bd-709df64424c8",
-    "name": "NestJsAPI",
-    "description": "REST API collection for the NestJsAPI project (a Jira-like project tracking backend built with NestJS). Covers every REST endpoint with both success and failure scenarios (validation errors, auth/role failures, not-found cases).\n\n**Auth model**: session-cookie based (express-session + passport). Run a \"Login\" request first — Postman's cookie jar will then automatically attach the session cookie to subsequent requests against the same {{baseUrl}}. Requests marked \"not logged in\" explicitly disable auth/cookies for that one request via a noauth override, so they still fail correctly even if you are logged in from a previous request.\n\n**Seeded test data**: SeedService assigns @test.com users to projects using a fixed \"memberIndices\" list per project in test-data/projects.json, so the same users always end up with the same roles on the same projects across every fresh seed. This collection relies on that: testOwnerEmail (James Smith) is always OWNER, and testEditorEmail (Patricia Perez) is always an EDITOR, of the \"Project Phoenix\" project — used by the \"Resolve seeded project id\" / \"insufficient project role\" requests in the Project folder. These emails are derived from committed, non-secret test data, so they're hardcoded as collection variables; only the shared password comes from your own .env (DEFAULT_PASSWORD).\n\n**Setup**: open this collection's Variables tab and fill in the \"Current value\" column for adminEmail / adminPassword / defaultEmail / defaultPassword to match your local .env seed values. Never commit real values into those fields.\n\n**Issue tracking**: the Issue/Label/Comment folders cover the core \"Jira-like\" domain. Issues/Labels require OWNER/ADMIN/EDITOR project roles to create or update (OWNER/ADMIN to delete); Comments may be created by any project member, including VIEWER, and edited/deleted by their own author or a project OWNER/ADMIN. SeedService seeds 4 labels and 5 issues per project deterministically (see its source for the exact templates), so Project Phoenix always has the same seeded issues/labels to test against.",
+    "name": "TaskFlow",
+    "description": "REST API collection for the TaskFlow project (a Jira-like project tracking backend built with NestJS). Covers every REST endpoint with both success and failure scenarios (validation errors, auth/role failures, not-found cases).\n\n**Auth model**: session-cookie based (express-session + passport). Run a \"Login\" request first — Postman's cookie jar will then automatically attach the session cookie to subsequent requests against the same {{baseUrl}}. Requests marked \"not logged in\" explicitly disable auth/cookies for that one request via a noauth override, so they still fail correctly even if you are logged in from a previous request.\n\n**Seeded test data**: SeedService assigns @test.com users to projects using a fixed \"memberIndices\" list per project in test-data/projects.json, so the same users always end up with the same roles on the same projects across every fresh seed. This collection relies on that: testOwnerEmail (James Smith) is always OWNER, and testEditorEmail (Patricia Perez) is always an EDITOR, of the \"Project Phoenix\" project — used by the \"Resolve seeded project id\" / \"insufficient project role\" requests in the Project folder. These emails are derived from committed, non-secret test data, so they're hardcoded as collection variables; only the shared password comes from your own .env (DEFAULT_PASSWORD).\n\n**Setup**: open this collection's Variables tab and fill in the \"Current value\" column for adminEmail / adminPassword / defaultEmail / defaultPassword to match your local .env seed values. Never commit real values into those fields.\n\n**Issue tracking**: the Issue/Label/Comment folders cover the core \"Jira-like\" domain. Issues/Labels require OWNER/ADMIN/EDITOR project roles to create or update (OWNER/ADMIN to delete); Comments may be created by any project member, including VIEWER, and edited/deleted by their own author or a project OWNER/ADMIN. SeedService seeds 4 labels and 5 issues per project deterministically (see its source for the exact templates), so Project Phoenix always has the same seeded issues/labels to test against.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -460,6 +460,112 @@
                     "exec": [
                       "pm.test(\"Status code is 400\", function () {",
                       "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register - 400 invalid email and too-short password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/register",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "register"
+                  ]
+                },
+                "description": "Email is not an email and the password is under 8 characters. Expect 400 Bad Request with one message per invalid field. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstname\": \"Postman\",\n  \"lastname\": \"Tester\",\n  \"email\": \"not-an-email\",\n  \"password\": \"short\",\n  \"passwordConfirmation\": \"short\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "",
+                      "pm.test(\"Lists the failed validation rules\", function () {",
+                      "    pm.expect(pm.response.json().message).to.eql([\"email must be an email\", \"password must be longer than or equal to 8 characters\"]);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register - 400 wrong types and too-long name",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/register",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "register"
+                  ]
+                },
+                "description": "firstname is a number and lastname is longer than the 25-character column. Expect 400 Bad Request. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstname\": 123,\n  \"lastname\": \"Abcdefghijklmnopqrstuvwxyz\",\n  \"email\": \"{{newUserEmail}}\",\n  \"password\": \"{{newUserPassword}}\",\n  \"passwordConfirmation\": \"{{newUserPassword}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "",
+                      "pm.test(\"Lists the failed validation rules\", function () {",
+                      "    pm.expect(pm.response.json().message).to.eql([\"firstname must be a string\", \"lastname must be shorter than or equal to 25 characters\"]);",
                       "});"
                     ]
                   }
@@ -980,6 +1086,55 @@
                   }
                 }
               ]
+            },
+            {
+              "name": "Login - 401 malformed email (guard runs before validation)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "Email is not a valid email address, yet the response is 401, not 400: the LocalAuthGuard (Passport) runs before the ValidationPipe in the request lifecycle, so the credentials are rejected before the body is ever validated.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"whatever\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 401\", function () {",
+                      "    pm.response.to.have.status(401);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },
@@ -1362,6 +1517,61 @@
                     "exec": [
                       "pm.test(\"Status code is 400\", function () {",
                       "    pm.response.to.have.status(400);",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reset password - 400 password too short",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/auth/reset-password/{{userId}}/{{resetToken}}",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "reset-password",
+                    "{{userId}}",
+                    "{{resetToken}}"
+                  ]
+                },
+                "description": "New password is under 8 characters. Expect 400 Bad Request. The ValidationPipe rejects the body before the token is checked, so this works even without a valid reset token. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"password\": \"short\",\n  \"passwordConfirmation\": \"short\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "noauth"
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Status code is 400\", function () {",
+                      "    pm.response.to.have.status(400);",
+                      "});",
+                      "",
+                      "pm.test(\"Lists the failed validation rules\", function () {",
+                      "    pm.expect(pm.response.json().message).to.eql([\"password must be longer than or equal to 8 characters\"]);",
                       "});"
                     ]
                   }
@@ -2178,6 +2388,55 @@
           ]
         },
         {
+          "name": "Create project - 400 name too long",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/project",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "project"
+              ]
+            },
+            "description": "Log in first. The name is longer than the 25-character column (without validation, Postgres would reject it with a 500). Expect 400 Bad Request. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"A project name that is far too long\",\n  \"description\": \"Name exceeds 25 characters.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"name must be shorter than or equal to 25 characters\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "List my projects - as admin (sees all)",
           "request": {
             "method": "GET",
@@ -2585,6 +2844,111 @@
                 "exec": [
                   "pm.test(\"Status code is 400\", function () {",
                   "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update project - 400 invalid field values",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/project/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "project",
+                "{{projectId}}"
+              ]
+            },
+            "description": "Log in as the owner of {{projectId}} (run \"Create project - success\" first). name is a number and description exceeds 500 characters. Expect 400 Bad Request. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": 123,\n  \"description\": \"{{tooLongText}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"tooLongText\", \"x\".repeat(501));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"name must be a string\", \"description must be shorter than or equal to 500 characters\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update project - 403 invalid body on a project you can't edit (guard runs first)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/project/{{seededProjectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "project",
+                "{{seededProjectId}}"
+              ]
+            },
+            "description": "Log in as the seeded project editor (testEditorEmail). Same invalid body as above, but the response is 403, not 400: ProjectRoleGuard runs before the ValidationPipe, so a user without the OWNER/ADMIN role is rejected before the body is validated.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": 123\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 403\", function () {",
+                  "    pm.response.to.have.status(403);",
                   "});"
                 ]
               }
@@ -3084,6 +3448,155 @@
           ]
         },
         {
+          "name": "Create issue - 400 several invalid fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/issue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "issue"
+              ]
+            },
+            "description": "Log in first. Invalid projectId, empty title, unknown priority and a non-UUID label id. Expect 400 Bad Request listing every invalid field (one message each). Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"not-a-uuid\",\n  \"title\": \"\",\n  \"description\": \"Test\",\n  \"priority\": \"URGENT\",\n  \"labelIds\": [\n    \"not-a-uuid\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"projectId must be a UUID\", \"title should not be empty\", \"priority must be one of the following values: LOW, MEDIUM, HIGH, CRITICAL\", \"each value in labelIds must be a UUID\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create issue - 400 invalid dueDate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/issue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "issue"
+              ]
+            },
+            "description": "Log in first. dueDate is not a date. Expect 400 Bad Request. (A valid ISO string like \"2026-12-01T00:00:00.000Z\" is converted to a Date by class-transformer.) Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{seededProjectId}}\",\n  \"title\": \"Bad due date\",\n  \"description\": \"Test\",\n  \"dueDate\": \"next friday\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"dueDate must be a Date instance\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create issue - unknown fields are stripped",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/issue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "issue"
+              ]
+            },
+            "description": "Log in as the seeded project editor (testEditorEmail). The body also sends \"status\" and \"createdAt\", which are not part of CreateIssueDto. The ValidationPipe (whitelist: true) strips them, so the issue is created with the default status TODO and a real createdAt. Expect 201 Created. Note: this creates a real issue in the seeded project.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{seededProjectId}}\",\n  \"title\": \"Tried to skip the workflow\",\n  \"description\": \"Sent status DONE on create.\",\n  \"status\": \"DONE\",\n  \"createdAt\": \"2000-01-01T00:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Unknown fields were ignored\", function () {",
+                  "    const issue = pm.response.json().data;",
+                  "    pm.expect(issue.status).to.eql(\"TODO\");",
+                  "    pm.expect(issue.createdAt).to.not.eql(\"2000-01-01T00:00:00.000Z\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "List issues for a project - success",
           "request": {
             "method": "GET",
@@ -3466,6 +3979,56 @@
           ]
         },
         {
+          "name": "Update issue - 400 null title and unknown status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/issue/{{seededIssueId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "issue",
+                "{{seededIssueId}}"
+              ]
+            },
+            "description": "Log in first. title is null (title is optional on update, but can't be cleared) and status is not a valid status. Expect 400 Bad Request. Compare with \"unassign (assigneeId: null)\", where null is allowed because assigneeId is nullable. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": null,\n  \"status\": \"FINISHED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"title must be a string\", \"status must be one of the following values: TODO, IN_PROGRESS, IN_REVIEW, DONE\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Delete issue - 403 insufficient project role",
           "request": {
             "method": "DELETE",
@@ -3752,6 +4315,55 @@
           ]
         },
         {
+          "name": "Create label - 400 invalid color",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/label",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "label"
+              ]
+            },
+            "description": "Log in first. color must be a 6-digit hex color like \"#3b82f6\"; short forms like \"#fff\" are rejected (they wouldn't fit the 7-character column consistently). Expect 400 Bad Request. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{seededProjectId}}\",\n  \"name\": \"frontend\",\n  \"color\": \"#fff\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"color must be a hex color in the format #rrggbb\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "List labels for a project - success",
           "request": {
             "method": "GET",
@@ -3977,6 +4589,65 @@
           ]
         },
         {
+          "name": "Update label - 400 invalid values",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/label/{{seededLabelId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "label",
+                "{{seededLabelId}}"
+              ]
+            },
+            "description": "Log in first. name exceeds 50 characters and color is not a hex color. Expect 400 Bad Request. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{tooLongName}}\",\n  \"color\": \"blue\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"tooLongName\", \"x\".repeat(51));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"name must be shorter than or equal to 50 characters\", \"color must be a hex color in the format #rrggbb\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Delete label - 403 insufficient project role",
           "request": {
             "method": "DELETE",
@@ -4188,6 +4859,55 @@
           ]
         },
         {
+          "name": "Create comment - 400 invalid issueId and empty body",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/comment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comment"
+              ]
+            },
+            "description": "Log in first. issueId is not a UUID and body is an empty string. Expect 400 Bad Request. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"issueId\": \"not-a-uuid\",\n  \"body\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"issueId must be a UUID\", \"body should not be empty\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "List comments for an issue - success",
           "request": {
             "method": "GET",
@@ -4388,6 +5108,65 @@
                 "exec": [
                   "pm.test(\"Status code is 404\", function () {",
                   "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update comment - 400 body too long (validated before lookup)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/comment/{{nonExistentUuid}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "comment",
+                "{{nonExistentUuid}}"
+              ]
+            },
+            "description": "Log in first. The comment id doesn't exist, yet the response is 400, not 404: the ValidationPipe rejects the 2001-character body before the controller (and the database lookup) runs. Body validation is done by the global ValidationPipe (see the DTO decorators), which returns one message per invalid property.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"{{tooLongText}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set(\"tooLongText\", \"x\".repeat(2001));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Lists the failed validation rules\", function () {",
+                  "    pm.expect(pm.response.json().message).to.eql([\"body must be shorter than or equal to 2000 characters\"]);",
                   "});"
                 ]
               }

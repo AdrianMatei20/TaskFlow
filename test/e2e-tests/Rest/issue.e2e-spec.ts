@@ -22,7 +22,6 @@ import { ProjectRole } from "../../../src/resources/project/enums/project-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -32,6 +31,8 @@ import { CreateProjectDto } from "src/resources/project/dto/create-project.dto";
 import { AssignUserDto } from "src/resources/project/dto/assign-user.dto";
 import { RegisterUserDto } from "src/resources/user/dto/register-user.dto";
 import { CreateIssueDto } from "src/resources/issue/dto/create-issue.dto";
+import { IssuePriority } from "src/resources/issue/enums/issue-priority";
+import { IssueStatus } from "src/resources/issue/enums/issue-status";
 
 import * as dotenv from 'dotenv';
 import request from 'supertest';
@@ -77,7 +78,6 @@ describe('IssueController (e2e)', () => {
             providers: [
                 ProjectService,
                 UserService,
-                ObjectValidationService,
                 LoggerService,
                 { provide: CacheService, useValue: mockCacheService },
             ],
@@ -217,7 +217,58 @@ describe('IssueController (e2e)', () => {
                 .set('Cookie', editorCookie);
 
             expect(response.status).toBe(HttpStatus.BAD_REQUEST);
-            expect(response.body.message).toBe(RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['description']));
+            expect(response.body.message).toEqual(['description must be a string']);
+        });
+
+        it('should return 400 BadRequest listing every invalid property', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/issue')
+                .send({ projectId: 'not-a-uuid', title: 'x'.repeat(201), description: 'Desc', priority: 'URGENT', labelIds: ['not-a-uuid'] })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+            expect(response.body).toEqual({
+                statusCode: HttpStatus.BAD_REQUEST,
+                message: [
+                    'projectId must be a UUID',
+                    'title must be shorter than or equal to 200 characters',
+                    `priority must be one of the following values: ${Object.values(IssuePriority).join(', ')}`,
+                    'each value in labelIds must be a UUID',
+                ],
+                error: 'Bad Request',
+            });
+            expect(await issueRepository.count()).toBe(0);
+        });
+
+        it('should strip properties that are not part of the DTO', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/issue')
+                .send({ projectId, title: 'Title', description: 'Desc', status: 'DONE', createdAt: '2000-01-01T00:00:00.000Z' })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.CREATED);
+            expect(response.body.data.status).toBe('TODO');
+            expect(response.body.data.createdAt).not.toBe('2000-01-01T00:00:00.000Z');
+        });
+
+        it('should convert an ISO dueDate string into a date', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/issue')
+                .send({ projectId, title: 'Title', description: 'Desc', dueDate: '2026-12-01T00:00:00.000Z' })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.CREATED);
+            expect(response.body.data.dueDate).toBe('2026-12-01T00:00:00.000Z');
+        });
+
+        it('should return 400 BadRequest for an invalid dueDate', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/issue')
+                .send({ projectId, title: 'Title', description: 'Desc', dueDate: 'next friday' })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+            expect(response.body.message).toEqual(['dueDate must be a Date instance']);
         });
 
     });
@@ -319,6 +370,41 @@ describe('IssueController (e2e)', () => {
                 .set('Cookie', viewerCookie);
 
             expect(response.status).toBe(HttpStatus.FORBIDDEN);
+        });
+
+        it('should return 400 BadRequest for null on a non-nullable field', async () => {
+            const createRes = await request(app.getHttpServer())
+                .post('/issue')
+                .send({ projectId, title: 'Issue 1', description: 'Desc 1' })
+                .set('Cookie', editorCookie);
+            const issueId = createRes.body.data.id;
+
+            const response = await request(app.getHttpServer())
+                .patch(`/issue/${issueId}`)
+                .send({ title: null, status: 'FINISHED' })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+            expect(response.body.message).toEqual([
+                'title must be a string',
+                `status must be one of the following values: ${Object.values(IssueStatus).join(', ')}`,
+            ]);
+        });
+
+        it('should accept null to clear a nullable field', async () => {
+            const createRes = await request(app.getHttpServer())
+                .post('/issue')
+                .send({ projectId, title: 'Issue 1', description: 'Desc 1', dueDate: '2026-12-01T00:00:00.000Z' })
+                .set('Cookie', editorCookie);
+            const issueId = createRes.body.data.id;
+
+            const response = await request(app.getHttpServer())
+                .patch(`/issue/${issueId}`)
+                .send({ dueDate: null })
+                .set('Cookie', editorCookie);
+
+            expect(response.status).toBe(HttpStatus.OK);
+            expect(response.body.data.dueDate).toBeNull();
         });
 
     });

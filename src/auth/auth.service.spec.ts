@@ -1,12 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { UserService } from '../resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { EmailService } from 'src/services/email/email.service';
 import { TokenService } from 'src/services/token/token.service';
 import { LoggerService } from 'src/logger/logger.service';
 import { BadRequestException, ConflictException, HttpStatus, InternalServerErrorException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { emptyRegisterUserDto, registerUserDtoNoEmail, registerUserDtoNoFirstname, registerUserDtoNoLastname, registerUserDtoNoPassword, registerUserDtoNoPasswordConfirmation, getSanitizedRegisterUserDto, getJamesSmithRegisterUserDto, registerUserDtoPasswordsNotMatching } from 'test/data/register-user';
+import { getSanitizedRegisterUserDto, getJamesSmithRegisterUserDto, registerUserDtoPasswordsNotMatching } from 'test/data/register-user';
 import { RegisterUserDto } from 'src/resources/user/dto/register-user.dto';
 import { ResetPasswordService } from './reset-password/reset-password.service';
 import { badResetPasswordDto, forgotPasswordDto, getResetPasswordDto, logInUserDto, resetPassword, user, userJamesSmith } from 'test/data/users';
@@ -69,7 +68,6 @@ describe('AuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        ObjectValidationService,
         { provide: UserService, useValue: mockUserService },
         { provide: EmailService, useValue: mockEmailService },
         { provide: TokenService, useValue: mockTokenService },
@@ -129,132 +127,6 @@ describe('AuthService', () => {
   });
 
   describe('registerUser', () => {
-
-    it('should return 400 BadRequest for missing parameters', async () => {
-      await expect(authService.registerUser(emptyRegisterUserDto as RegisterUserDto))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.REGISTER_USER.MISSING_PROPS(['firstname', 'lastname', 'email', 'password', 'passwordConfirmation']),
-        LOG_CONTEXTS.AuthService.registerUser,
-        { registerUserDto: emptyRegisterUserDto },
-      );
-
-      try {
-        await authService.registerUser(emptyRegisterUserDto as RegisterUserDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['firstname', 'lastname', 'email', 'password', 'passwordConfirmation']),
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing firstname', async () => {
-      await expect(authService.registerUser(registerUserDtoNoFirstname as RegisterUserDto))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.REGISTER_USER.MISSING_PROPS(['firstname']),
-        LOG_CONTEXTS.AuthService.registerUser,
-        { registerUserDto: getSanitizedRegisterUserDto(registerUserDtoNoFirstname as RegisterUserDto) },
-      );
-
-      try {
-        await authService.registerUser(registerUserDtoNoFirstname as RegisterUserDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['firstname']),
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing lastname', async () => {
-      await expect(authService.registerUser(registerUserDtoNoLastname as RegisterUserDto))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.REGISTER_USER.MISSING_PROPS(['lastname']),
-        LOG_CONTEXTS.AuthService.registerUser,
-        { registerUserDto: getSanitizedRegisterUserDto(registerUserDtoNoLastname as RegisterUserDto) },
-      );
-
-      try {
-        await authService.registerUser(registerUserDtoNoLastname as RegisterUserDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['lastname']),
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing email', async () => {
-      await expect(authService.registerUser(registerUserDtoNoEmail as RegisterUserDto))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.REGISTER_USER.MISSING_PROPS(['email']),
-        LOG_CONTEXTS.AuthService.registerUser,
-        { registerUserDto: getSanitizedRegisterUserDto(registerUserDtoNoEmail as RegisterUserDto) },
-      );
-
-      try {
-        await authService.registerUser(registerUserDtoNoEmail as RegisterUserDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['email']),
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing password', async () => {
-      await expect(authService.registerUser(registerUserDtoNoPassword as RegisterUserDto))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.REGISTER_USER.MISSING_PROPS(['password']),
-        LOG_CONTEXTS.AuthService.registerUser,
-        { registerUserDto: getSanitizedRegisterUserDto(registerUserDtoNoPassword as RegisterUserDto) },
-      );
-
-      try {
-        await authService.registerUser(registerUserDtoNoPassword as RegisterUserDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['password']),
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing password confirmation', async () => {
-      await expect(authService.registerUser(registerUserDtoNoPasswordConfirmation as RegisterUserDto))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.REGISTER_USER.MISSING_PROPS(['passwordConfirmation']),
-        LOG_CONTEXTS.AuthService.registerUser,
-        { registerUserDto: getSanitizedRegisterUserDto(registerUserDtoNoPasswordConfirmation as RegisterUserDto) },
-      );
-
-      try {
-        await authService.registerUser(registerUserDtoNoPasswordConfirmation as RegisterUserDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['passwordConfirmation']),
-        });
-      }
-    });
 
     it('should return 409 Conflict for email already registered', async () => {
       const registerUserDto: RegisterUserDto = getJamesSmithRegisterUserDto();

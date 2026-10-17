@@ -21,7 +21,6 @@ import { ProjectRole } from "../../../src/resources/project/enums/project-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -71,7 +70,6 @@ describe('GraphQL comment (e2e)', () => {
             providers: [
                 ProjectService,
                 UserService,
-                ObjectValidationService,
                 LoggerService,
                 { provide: CacheService, useValue: mockCacheService },
             ],
@@ -126,7 +124,7 @@ describe('GraphQL comment (e2e)', () => {
 
         ownerCookie = await login(owner.email);
 
-        const createProjectDto: CreateProjectDto = { name: 'GraphQL Comment Test Project', description: 'For comment GraphQL e2e tests.' };
+        const createProjectDto: CreateProjectDto = { name: 'GQL Comment Test Project', description: 'For comment GraphQL e2e tests.' };
         const createProjectRes = await request(app.getHttpServer())
             .post('/project')
             .send(createProjectDto)

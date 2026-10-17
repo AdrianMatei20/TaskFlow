@@ -21,7 +21,6 @@ import { GlobalRole } from "../../../src/resources/user/enums/global-role";
 
 import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
-import { ObjectValidationService } from "../../../src/services/object-validation/object-validation.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
@@ -88,7 +87,6 @@ describe('GraphQL project (e2e)', () => {
       providers: [
         ProjectService,
         UserService,
-        ObjectValidationService,
         LoggerService,
         { provide: CacheService, useValue: mockCacheService },
       ],

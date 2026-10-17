@@ -15,7 +15,6 @@ import { IssuePriority } from './enums/issue-priority';
 
 import { ProjectService } from 'src/resources/project/project.service';
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
@@ -105,7 +104,6 @@ describe('IssueService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IssueService,
-        ObjectValidationService,
         { provide: getRepositoryToken(Issue), useValue: mockIssueRepository },
         { provide: getRepositoryToken(Label), useValue: mockLabelRepository },
         { provide: ProjectService, useValue: mockProjectService },
@@ -149,12 +147,6 @@ describe('IssueService', () => {
       const result = await issueService.create(dto, GLOBAL_ADMIN_ID);
 
       expect(result).toBeDefined();
-    });
-
-    it('should throw BadRequest for missing properties', async () => {
-      await expect(issueService.create({ projectId: PROJECT_ID } as CreateIssueDto, EDITOR_ID))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalled();
     });
 
     it('should throw Forbidden for a viewer', async () => {

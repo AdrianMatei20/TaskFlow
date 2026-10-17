@@ -2,14 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ProjectService } from './project.service';
 import { UserService } from '../user/user.service';
 import { BadRequestException, HttpStatus, InternalServerErrorException, NotFoundException } from '@nestjs/common';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { Project } from './entities/project.entity';
 import { UserProjectRole } from './entities/user-project-role.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { LoggerService } from 'src/logger/logger.service';
-import { createProjectDto, createProjectDtoEmpty, createProjectDtoNoDescription, createProjectDtoNoName, JamesOwnerAndChristopherMember, project, projectFour, projects, projectOne, projectThree, projectTwo, projectWithJamesOwnerAndChristopherMember, RonaldOwnerAndJamesMember, updateProjectDto, updateProjectDtoEmpty, userProjectRole, userProjectRoles } from 'test/data/projects';
+import { createProjectDto, JamesOwnerAndChristopherMember, project, projectFour, projects, projectOne, projectThree, projectTwo, projectWithJamesOwnerAndChristopherMember, RonaldOwnerAndJamesMember, updateProjectDto, updateProjectDtoEmpty, userProjectRole, userProjectRoles } from 'test/data/projects';
 import { userJamesSmith } from 'test/data/users';
 import { invalidUUID, nonExistingUserId } from 'test/data/UUIDs';
 import { LOG_MESSAGES } from 'src/constants/log-messages';
@@ -60,7 +59,6 @@ describe('ProjectService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProjectService,
-        ObjectValidationService,
         {
           provide: getRepositoryToken(Project),
           useValue: mockProjectRepository,
@@ -165,78 +163,6 @@ describe('ProjectService', () => {
         expect(error.getResponse()).toEqual({
           statusCode: HttpStatus.NOT_FOUND,
           message: RETURN_MESSAGES.NOT_FOUND.USER,
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing parameters', async () => {
-      (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
-
-      await expect(projectService.create(createProjectDtoEmpty as CreateProjectDto, userJamesSmith.id))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalled();
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.MISSING_PROPS(['name', 'description']),
-        LOG_CONTEXTS.ProjectService.create,
-        { createProjectDto: createProjectDtoEmpty, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDtoEmpty as CreateProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['name', 'description']),
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing parameter \'name\'', async () => {
-      (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
-
-      await expect(projectService.create(createProjectDtoNoName as CreateProjectDto, userJamesSmith.id))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalled();
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.MISSING_PROPS(['name']),
-        LOG_CONTEXTS.ProjectService.create,
-        { createProjectDto: createProjectDtoNoName, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDtoNoName as CreateProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['name']),
-        });
-      }
-    });
-
-    it('should return 400 BadRequest for missing parameter \'description\'', async () => {
-      (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
-
-      await expect(projectService.create(createProjectDtoNoDescription as CreateProjectDto, userJamesSmith.id))
-        .rejects.toThrow(BadRequestException);
-      expect(mockLoggerService.warn).toHaveBeenCalled();
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.MISSING_PROPS(['description']),
-        LOG_CONTEXTS.ProjectService.create,
-        { createProjectDto: createProjectDtoNoDescription, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDtoNoDescription as CreateProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BadRequestException);
-        expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(['description']),
         });
       }
     });

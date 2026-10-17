@@ -58,4 +58,6 @@ export const LOG_CONTEXTS = {
         remove: 'CommentService.remove',
     },
 
+    ValidationPipe: 'ValidationPipe',
+
   };

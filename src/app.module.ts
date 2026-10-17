@@ -29,7 +29,6 @@ import { EmailService } from './services/email/email.service';
 import { TokenService } from './services/token/token.service';
 import { JwtService } from '@nestjs/jwt';
 import { SeedService } from './services/seed/seed.service';
-import { ObjectValidationService } from './services/object-validation/object-validation.service';
 import { LoggerService } from './logger/logger.service';
 import { AuthService } from './auth/auth.service';
 import { ResetPasswordService } from './auth/reset-password/reset-password.service';
@@ -43,6 +42,7 @@ import { LabelResolver } from './graphql/label/label.resolver';
 import { CommentResolver } from './graphql/comment/comment.resolver';
 import { join } from 'path';
 import { CacheModule } from './cache/cache.module';
+import { validationPipeProvider } from './shared/validation/validation-pipe.provider';
 
 @Module({
   imports: [
@@ -90,12 +90,12 @@ import { CacheModule } from './cache/cache.module';
   ],
   controllers: [AppController],
   providers: [
+    validationPipeProvider,
     AppService,
     EmailService,
     TokenService,
     JwtService,
     SeedService,
-    ObjectValidationService,
     LoggerService,
     AuthService,
     ResetPasswordService,

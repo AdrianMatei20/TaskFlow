@@ -16,6 +16,8 @@ import { UserService } from 'src/resources/user/user.service';
 import { IssueService } from 'src/resources/issue/issue.service';
 import { LabelService } from 'src/resources/label/label.service';
 import { CommentService } from 'src/resources/comment/comment.service';
+import { LoggerService } from 'src/logger/logger.service';
+import { createValidationPipe } from 'src/shared/validation/validation-pipe.provider';
 import { RegisterUserDto } from 'src/resources/user/dto/register-user.dto';
 import { CreateProjectDto } from 'src/resources/project/dto/create-project.dto';
 import { UpdateProjectDto } from 'src/resources/project/dto/update-project.dto';
@@ -62,6 +64,7 @@ export class SeedService {
         private readonly issueService: IssueService,
         private readonly labelService: LabelService,
         private readonly commentService: CommentService,
+        private readonly loggerService: LoggerService,
     ) { }
 
     public async seed() {
@@ -315,9 +318,13 @@ export class SeedService {
             }, false);
         } catch { /* expected: passwords don't match */ }
 
-        // Bad request: missing required properties.
+        // Bad request: missing required properties. Body validation happens in the global ValidationPipe
+        // (before the service is reached), so this one goes through the pipe instead of AuthService.
         try {
-            await this.authService.registerUser({ firstname: 'Seed', lastname: 'Check' } as RegisterUserDto, false);
+            await createValidationPipe(this.loggerService).transform(
+                { firstname: 'Seed', lastname: 'Check' },
+                { type: 'body', metatype: RegisterUserDto },
+            );
         } catch { /* expected: missing properties */ }
 
         // Not found: valid UUID shape, but no such project.

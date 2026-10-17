@@ -2,7 +2,7 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-<h1 align="center">NestJsAPI</h1>
+<h1 align="center">TaskFlow</h1>
 
 <p align="center">A Jira-like project-tracking backend built with NestJS, showcasing a broad slice of the framework: REST + GraphQL side by side, session auth with role-based access control, an issue tracker with its own permission model, Redis caching, structured logging, and Prometheus/Grafana observability.</p>
 
@@ -17,6 +17,7 @@ Everything here is deliberately built end-to-end rather than stubbed: real guard
 - **Auth**: session-cookie auth (`express-session` + Passport local strategy), registration with email verification, forgot/reset password flows with time-limited tokens, account deletion.
 - **Authorization**: two independent role layers — a user's global role (regular user vs. admin) and their per-project role (owner/admin/editor/viewer) — enforced via guards (`AuthenticatedGuard`, `GlobalAdminGuard`, `ProjectRoleGuard`) and service-level checks.
 - **Projects**: CRUD with ownership and membership, exposed over both REST and GraphQL.
+- **Validation**: a global `ValidationPipe` (registered as an `APP_PIPE` provider, so it covers REST, GraphQL and e2e tests) with `whitelist` + `transform`. DTOs use `class-validator` rules that mirror the database columns (lengths, UUIDs, enums, `#rrggbb` colors, dates converted via `class-transformer`), `PartialType` reuses create rules for updates, and a custom `@IsOptionalNonNullable()` rejects explicit `null` on non-nullable fields. Failures return one readable message per field and are logged to the `logs` table (property and rule names only, never submitted values).
 - **Issue tracking**: `Issue` / `Label` / `Comment` resources with a type/status/priority workflow, assignment (restricted to project members), many-to-many labels, and a permission model where creating/editing issues and labels needs an OWNER/ADMIN/EDITOR project role, deleting needs OWNER/ADMIN, and commenting is open to any project member (including VIEWER).
 - **Caching**: Redis-backed cache (`cache-manager-ioredis-yet`) on hot read paths, with reads falling back to the database on a cache miss or cache-layer error rather than failing the request.
 - **Logging**: every significant service action (success, validation failure, not-found, forbidden, unexpected error) is written to a `logs` table with level/context/metadata, queryable via `GET /logger` with level/date/sort filters.
@@ -107,7 +108,7 @@ On startup, `SeedService` seeds (idempotently — it checks what already exists 
 - An **admin** account (`ADMIN_USER_EMAIL`) and a **default** account (`DEFAULT_USER_EMAIL`), both using `DEFAULT_PASSWORD`.
 - ~50 `@test.com` demo users and ~50 projects, with ownership and membership assigned from a fixed table in `test-data/projects.json` (`memberIndices`) — the same users end up owning/editing the same projects on every fresh seed, not randomly.
 - 4 labels and 5 issues per project, cycling through fixed templates by project/issue index (see `seedIssuesLabelsAndComments` in [seed.service.ts](src/services/seed/seed.service.ts)), plus a handful of comments.
-- A small set of deliberately-invalid requests (duplicate email, bad UUID, missing fields, etc.) run through the real service methods, so the `logs` table also has realistic `WARN` entries to query, not just `INFO`.
+- A small set of deliberately-invalid requests (duplicate email, bad UUID, missing fields, etc.) run through the real code paths (the global `ValidationPipe` for body validation, the service methods for everything else), so the `logs` table also has realistic `WARN` entries to query, not just `INFO`.
 
 ## Project structure
 
@@ -129,7 +130,8 @@ src/
     seed/                 deterministic demo data
     email/                 outgoing email (EmailJS)
     token/                 JWT-based verification/reset tokens
-    object-validation/     lightweight required-field validation
+  shared/
+    validation/           global ValidationPipe provider + custom validators
 test/
   e2e-tests/             REST + GraphQL end-to-end tests
   data/                  shared test fixtures

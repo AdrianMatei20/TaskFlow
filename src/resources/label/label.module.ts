@@ -6,13 +6,12 @@ import { Label } from './entities/label.entity';
 import { Log } from 'src/logger/entities/log.entity';
 import { LabelController } from './label.controller';
 import { LabelService } from './label.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 
 @Module({
   imports: [UserModule, ProjectModule, TypeOrmModule.forFeature([Label, Log])],
   controllers: [LabelController],
-  providers: [LabelService, ObjectValidationService, LoggerService],
+  providers: [LabelService, LoggerService],
   exports: [LabelService],
 })
 export class LabelModule { }

@@ -1,14 +1,18 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsEmail, IsNotEmpty } from "class-validator";
+import { IsNotEmpty, IsString, MaxLength, MinLength } from "class-validator";
 
 export class ResetPasswordDto {
 
-    @IsNotEmpty()
+    // Same rules as RegisterUserDto.password (bcrypt's 72-byte limit).
     @ApiProperty({type: String, description: 'User\'s new password.', example: 'P@ssword123'})
+    @MaxLength(72)
+    @MinLength(8)
+    @IsString()
     password: string;
 
-    @IsNotEmpty()
     @ApiProperty({type: String, description: 'User\'s new password again.', example: 'P@ssword123'})
+    @IsNotEmpty()
+    @IsString()
     passwordConfirmation: string;
-    
+
 }

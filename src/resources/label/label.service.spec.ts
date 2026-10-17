@@ -11,7 +11,6 @@ import { GlobalRole } from 'src/resources/user/enums/global-role';
 
 import { ProjectService } from 'src/resources/project/project.service';
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 import { CreateLabelDto } from './dto/create-label.dto';
 
@@ -86,7 +85,6 @@ describe('LabelService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         LabelService,
-        ObjectValidationService,
         { provide: getRepositoryToken(Label), useValue: mockLabelRepository },
         { provide: ProjectService, useValue: mockProjectService },
         { provide: UserService, useValue: mockUserService },
@@ -113,11 +111,6 @@ describe('LabelService', () => {
       const result = await labelService.create(dto, EDITOR_ID);
       expect(result).toBeDefined();
       expect(mockLoggerService.info).toHaveBeenCalled();
-    });
-
-    it('should throw BadRequest for missing properties', async () => {
-      await expect(labelService.create({ projectId: PROJECT_ID } as CreateLabelDto, EDITOR_ID))
-        .rejects.toThrow(BadRequestException);
     });
 
     it('should throw Forbidden for a viewer', async () => {

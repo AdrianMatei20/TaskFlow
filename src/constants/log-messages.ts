@@ -2,7 +2,6 @@ export const LOG_MESSAGES = {
 
     AUTH: {
         REGISTER_USER: {
-            MISSING_PROPS: (missingProperties: string[]) => `Could not create account. Reason: missing properties: ${missingProperties}.`,
             EMAIL_ALREADY_REGISTERED: 'Could not create account. Reason: email already registered.',
             PASSWORD_MISMATCH: 'Could not create account. Reason: passwords don\'t match',
             SUCCESS: (firstname: string, lastname: string, email: string) => `User '${firstname} ${lastname}' successfully registered with email '${email}'.`,
@@ -59,7 +58,6 @@ export const LOG_MESSAGES = {
             INVALID_UUID: 'Could not create project. The provided user id was not a valid UUID.',
             FAILED_TO_FIND_USER: (userId: string) => `Failed to find user with id '${userId}'.`,
             USER_NOT_FOUND: (projectName: string, userId: string) => `Could not create project '${projectName}'. User with id '${userId}' not found.`,
-            MISSING_PROPS: (missingProperties: string[]) => `Could not create project. Reason: missing properties: ${missingProperties}.`,
             FAILED_TO_CREATE_PROJECT: (projectName: string) => `Failed to create project '${projectName}'.`,
             SUCCESS: (firstname: string, lastname: string, projectName: string) => `User '${firstname} ${lastname}' created project '${projectName}'.`,
         },
@@ -101,7 +99,6 @@ export const LOG_MESSAGES = {
 
     ISSUE: {
         CREATE: {
-            MISSING_PROPS: (missingProperties: string[]) => `Could not create issue. Reason: missing properties: ${missingProperties}.`,
             FORBIDDEN: (userId: string, projectId: string) => `User '${userId}' attempted to create an issue on project '${projectId}' without sufficient permissions.`,
             INVALID_ASSIGNEE_ID: 'Could not create issue. The provided assignee id was not a valid UUID.',
             ASSIGNEE_NOT_FOUND: (assigneeId: string) => `Could not create issue. Assignee with id '${assigneeId}' not found, or not a member of the project.`,
@@ -138,7 +135,6 @@ export const LOG_MESSAGES = {
 
     LABEL: {
         CREATE: {
-            MISSING_PROPS: (missingProperties: string[]) => `Could not create label. Reason: missing properties: ${missingProperties}.`,
             FORBIDDEN: (userId: string, projectId: string) => `User '${userId}' attempted to create a label on project '${projectId}' without sufficient permissions.`,
             FAILED_TO_CREATE_LABEL: (name: string) => `Failed to create label '${name}'.`,
             SUCCESS: (name: string, projectName: string) => `Created label '${name}' on project '${projectName}'.`,
@@ -171,7 +167,6 @@ export const LOG_MESSAGES = {
 
     COMMENT: {
         CREATE: {
-            MISSING_PROPS: (missingProperties: string[]) => `Could not create comment. Reason: missing properties: ${missingProperties}.`,
             FORBIDDEN: (userId: string, issueId: string) => `User '${userId}' attempted to comment on issue '${issueId}' without being a member of its project.`,
             FAILED_TO_CREATE_COMMENT: (issueId: string) => `Failed to create comment on issue '${issueId}'.`,
             SUCCESS: (issueId: string) => `Created comment on issue '${issueId}'.`,
@@ -194,6 +189,10 @@ export const LOG_MESSAGES = {
             FAILED_TO_DELETE_COMMENT: (commentId: string) => `Failed to delete comment '${commentId}'.`,
             SUCCESS: (commentId: string) => `Deleted comment '${commentId}'.`,
         },
+    },
+
+    VALIDATION: {
+        FAILED: (dto: string, properties: string[]) => `Request body failed ${dto} validation. Invalid properties: ${properties}.`,
     },
 
 };

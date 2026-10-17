@@ -15,7 +15,6 @@ import { IssuePriority } from 'src/resources/issue/enums/issue-priority';
 
 import { IssueService } from 'src/resources/issue/issue.service';
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 
@@ -109,7 +108,6 @@ describe('CommentService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CommentService,
-        ObjectValidationService,
         { provide: getRepositoryToken(Comment), useValue: mockCommentRepository },
         { provide: IssueService, useValue: mockIssueService },
         { provide: UserService, useValue: mockUserService },
@@ -136,11 +134,6 @@ describe('CommentService', () => {
       const result = await commentService.create(dto, VIEWER_ID);
       expect(result).toBeDefined();
       expect(mockLoggerService.info).toHaveBeenCalled();
-    });
-
-    it('should throw BadRequest for missing properties', async () => {
-      await expect(commentService.create({ issueId: ISSUE_ID } as CreateCommentDto, VIEWER_ID))
-        .rejects.toThrow(BadRequestException);
     });
 
     it('should propagate Forbidden from IssueService for a non-member', async () => {

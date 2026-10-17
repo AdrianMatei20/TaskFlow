@@ -14,7 +14,6 @@ import { GlobalRole } from 'src/resources/user/enums/global-role';
 
 import { ProjectService } from 'src/resources/project/project.service';
 import { UserService } from 'src/resources/user/user.service';
-import { ObjectValidationService } from 'src/services/object-validation/object-validation.service';
 import { LoggerService } from 'src/logger/logger.service';
 
 import { LOG_CONTEXTS } from 'src/constants/log-contexts';
@@ -30,7 +29,6 @@ export class LabelService {
     @InjectRepository(Label) private labelRepository: Repository<Label>,
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
-    private readonly objectValidationService: ObjectValidationService,
     private readonly loggerService: LoggerService,
   ) { }
 
@@ -54,19 +52,6 @@ export class LabelService {
 
   async create(createLabelDto: CreateLabelDto, userId: string): Promise<Label> {
     const project: Project = await this.projectService.findOneById(createLabelDto.projectId);
-
-    const missingProperties: string[] = this.objectValidationService.getMissingPropertiesForCreateLabelDto(createLabelDto);
-    if (missingProperties.length > 0) {
-      await this.loggerService.warn(
-        LOG_MESSAGES.LABEL.CREATE.MISSING_PROPS(missingProperties),
-        LOG_CONTEXTS.LabelService.create,
-        { createLabelDto, userId },
-      );
-      throw new BadRequestException({
-        statusCode: HttpStatus.BAD_REQUEST,
-        message: RETURN_MESSAGES.BAD_REQUEST.MISSING_PROPS(missingProperties),
-      });
-    }
 
     const user: User = await this.userService.findOneById(userId);
     const access = this.resolveAccess(project, userId, user?.globalRole);
