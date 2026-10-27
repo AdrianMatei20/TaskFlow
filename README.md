@@ -100,6 +100,7 @@ npm run test:cov   # coverage report
 
 - **Swagger**: `http://localhost:3001/api`
 - **GraphQL Playground**: `http://localhost:3001/graphql`
+- **Performance**: [PERFORMANCE.md](PERFORMANCE.md): a GraphQL performance assessment with realistic seed data, a per-request SQL query counter, k6 load tests, DataLoader, `EXPLAIN ANALYZE` with an index migration, and query depth/complexity/page-size limits. Tooling lives in [perf/](perf/).
 - **Postman collection**: [postman/](postman/) — every REST endpoint with both success and failure scenarios (validation errors, auth/role failures, not-found cases), wired up to use the deterministic seed data. See [postman/README.md](postman/README.md) for setup.
 
 ## Seed data
