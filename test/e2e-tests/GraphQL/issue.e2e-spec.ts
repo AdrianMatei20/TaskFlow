@@ -24,6 +24,7 @@ import { UserService } from "../../../src/resources/user/user.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { IssueService } from "../../../src/resources/issue/issue.service";
+import { MAX_PAGE_SIZE, MAX_QUERY_COMPLEXITY } from "../../../src/graphql/limits/query-limits";
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
 import { getRonaldClarkRegisterUserDto, getLisaMitchellRegisterUserDto, getMichelleJohnsonRegisterUserDto } from "../../data/register-user";
 import { LogInUserDto } from "../../../src/auth/dto/log-in-user.dto";
@@ -333,6 +334,55 @@ describe('GraphQL issue (e2e)', () => {
             expect(userBatch).toHaveBeenCalledTimes(1);
 
             jest.restoreAllMocks();
+        });
+
+    });
+
+    describe('query limits', () => {
+
+        it('should reject a page size above the maximum', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/graphql')
+                // A single project keeps the cost low (~100), so this hits the page-size check, not the complexity limit
+                .send({ query: `{ project(id: "${projectId}") { issues(first: ${MAX_PAGE_SIZE + 1}) { id } } }` })
+                .set('Cookie', ownerCookie);
+
+            expect(response.status).toBe(HttpStatus.OK);
+            expect(response.body.errors[0].extensions.originalError.message).toEqual([`first must not be greater than ${MAX_PAGE_SIZE}`]);
+        });
+
+        it('should reject a query above the complexity limit before resolving anything', async () => {
+            const issueBatch = jest.spyOn(app.get(IssueService), 'findPagesByProjectIds');
+            // Each alias is allowed on its own; 30 of them together exceed the budget.
+            const aliases = Array.from({ length: 30 }, (_, i) =>
+                `p${i}: userProjects { issues(first: ${MAX_PAGE_SIZE}) { id title assignee { firstname } } }`).join(' ');
+
+            const response = await request(app.getHttpServer())
+                .post('/graphql')
+                .send({ query: `{ ${aliases} }` })
+                .set('Cookie', ownerCookie);
+
+            expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+            expect(response.body.errors[0].extensions).toEqual(expect.objectContaining({
+                code: 'QUERY_TOO_COMPLEX',
+                maxComplexity: MAX_QUERY_COMPLEXITY,
+            }));
+            expect(response.body.errors[0].extensions.complexity).toBeGreaterThan(MAX_QUERY_COMPLEXITY);
+            expect(issueBatch).not.toHaveBeenCalled();
+
+            jest.restoreAllMocks();
+        });
+
+        it('should report the cost of an accepted query in extensions.complexity', async () => {
+            const response = await request(app.getHttpServer())
+                .post('/graphql')
+                .send({ query: '{ userProjects { id issues(first: 10) { id } } }' })
+                .set('Cookie', ownerCookie);
+
+            expect(response.status).toBe(HttpStatus.OK);
+            expect(response.body.errors).not.toBeDefined();
+            // userProjects is unpaginated: 100 assumed items x (id + issues: 10 x id) = 100 x 11
+            expect(response.body.extensions.complexity).toEqual({ cost: 1100, max: MAX_QUERY_COMPLEXITY });
         });
 
     });

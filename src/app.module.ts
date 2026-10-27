@@ -46,6 +46,9 @@ import { validationPipeProvider } from './shared/validation/validation-pipe.prov
 import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.filter';
 import { QueryCountingLogger } from './shared/query-counter/sql-query-counter';
 import { createGraphqlLoaders, GraphqlContext } from './graphql/loaders/graphql-loaders';
+import { createDepthLimitRule } from './graphql/limits/depth-limit.rule';
+import { ComplexityPlugin } from './graphql/limits/complexity.plugin';
+import { MAX_QUERY_DEPTH } from './graphql/limits/query-limits';
 import { UserService } from './resources/user/user.service';
 import { IssueService } from './resources/issue/issue.service';
 
@@ -92,6 +95,7 @@ import { IssueService } from './resources/issue/issue.service';
         sortSchema: true,
         playground: true, // enable GraphQL playground
         introspection: true, // explicitly allow introspection
+        validationRules: [createDepthLimitRule(MAX_QUERY_DEPTH)], // the complexity limit is ComplexityPlugin (needs variables)
         // Runs once per request: attaches the user (req) and a fresh set of DataLoaders, so their cache lives
         // exactly as long as the request.
         context: ({ req }): GraphqlContext => ({ req, loaders: createGraphqlLoaders(userService, issueService) }),
@@ -109,6 +113,7 @@ import { IssueService } from './resources/issue/issue.service';
   providers: [
     validationPipeProvider,
     allExceptionsFilterProvider,
+    ComplexityPlugin,
     AppService,
     EmailService,
     TokenService,

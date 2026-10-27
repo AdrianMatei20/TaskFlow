@@ -151,7 +151,10 @@ type PublicProjectDto {
   createdAt: DateTime!
   description: String!
   id: ID!
-  issues(first: Int! = 20): [PublicIssueDto!]!
+  issues(
+    """Number of issues to return (1-100), newest first."""
+    first: Int! = 20
+  ): [PublicIssueDto!]!
   members: [ProjectMember!]!
   name: String!
   owner: ProjectMember!

@@ -24,6 +24,7 @@
     "migration:show": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:show -d src/database/data-source.ts"
   },
   "dependencies": {
+    "@apollo/server": "4.11.3",
     "@emailjs/nodejs": "^4.0.4",
     "@nestjs/apollo": "^12.2.2",
     "@nestjs/cache-manager": "^3.0.1",
@@ -47,6 +48,7 @@
     "class-validator": "^0.14.1",
     "dataloader": "2.2.3",
     "graphql": "^16.10.0",
+    "graphql-query-complexity": "1.1.1",
     "ioredis": "^5.7.0",
     "jest-extended": "^4.0.2",
     "nestjs-session": "^3.0.1",
