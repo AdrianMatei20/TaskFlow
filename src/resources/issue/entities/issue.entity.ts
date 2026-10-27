@@ -1,4 +1,4 @@
-import { Column, Entity, JoinTable, ManyToMany, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId } from "typeorm";
+import { Column, Entity, Index, JoinTable, ManyToMany, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId } from "typeorm";
 import { Project } from "src/resources/project/entities/project.entity";
 import { User } from "src/resources/user/entities/user.entity";
 import { Label } from "src/resources/label/entities/label.entity";
@@ -8,6 +8,8 @@ import { IssueStatus } from "../enums/issue-status";
 import { IssuePriority } from "../enums/issue-priority";
 
 @Entity()
+// Created by the AddIssueProjectCreatedAtIndex migration (CONCURRENTLY); declared here so `synchronize` keeps it.
+@Index('IDX_issue_project_created_at', ['project', 'createdAt'])
 export class Issue {
 
     @PrimaryGeneratedColumn("uuid")

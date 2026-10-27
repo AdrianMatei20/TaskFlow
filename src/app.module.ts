@@ -76,6 +76,11 @@ import { IssueService } from './resources/issue/issue.service';
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
       logger: new QueryCountingLogger(), // counts queries per request when SQL_QUERY_COUNTER=true
+      // Migrations run before `synchronize`, so indexes are first built CONCURRENTLY by a migration instead of with a
+      // write-blocking CREATE INDEX by synchronize. Postgres only: the e2e tests use SQLite.
+      migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
+      migrationsRun: process.env.DB_TYPE === 'postgres',
+      migrationsTransactionMode: 'each', // lets a migration opt out of transactions (needed for CONCURRENTLY)
     }),
     TypeOrmModule.forFeature([User, Project, UserProjectRole, Issue, Label, Comment, Log, ResetPassword]),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({

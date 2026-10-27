@@ -168,10 +168,36 @@ export class IssueService {
   }
 
   // Used by the GraphQL DataLoader behind Project.issues: the latest `first` issues of each project, for many projects in
-  // one query. A plain LIMIT would cap the whole result, so ROW_NUMBER() numbers the issues within each project and keeps
-  // the first `first` of each. No access check here: the parent project query has already checked that the user can see
-  // the project. No relations either: assignee/reporter are resolved by their own field resolvers.
+  // one query. No access check here: the parent project query has already checked that the user can see the project.
+  // No relations either: assignee/reporter are resolved by their own field resolvers.
+  //
+  // On Postgres, a LATERAL join runs one small subquery per project that walks IDX_issue_project_created_at backwards
+  // (newest first) and stops after `first` rows. A window function (ROW_NUMBER() ... <= first) would read and number
+  // every issue of each project first: EXPLAIN ANALYZE in perf/explain shows ~5x-10x less work with LATERAL + index.
   async findPagesByProjectIds(projectIds: readonly string[], first: number): Promise<Issue[]> {
+    if (this.issueRepository.manager.connection.options.type !== 'postgres') {
+      return this.findPagesByProjectIdsPortable(projectIds, first);
+    }
+
+    const rows: object[] = await this.issueRepository.query(
+      `SELECT page.* FROM unnest($1::uuid[]) AS project(id)
+       CROSS JOIN LATERAL (
+         SELECT issue.* FROM issue
+         WHERE issue."projectId" = project.id
+         ORDER BY issue."createdAt" DESC
+         LIMIT $2
+       ) page
+       ORDER BY page."createdAt" DESC`,
+      [projectIds, first],
+    );
+    // Raw rows carry the foreign key columns (projectId, reporterId, assigneeId) under the same names as the entity's
+    // @RelationId properties, so they map directly.
+    return rows.map(row => Object.assign(new Issue(), row));
+  }
+
+  // Same result without LATERAL/unnest, for SQLite (the e2e tests). ROW_NUMBER() numbers the issues within each project
+  // and keeps the first `first` of each.
+  private async findPagesByProjectIdsPortable(projectIds: readonly string[], first: number): Promise<Issue[]> {
     return await this.issueRepository.createQueryBuilder('issue')
       .where(`issue.id IN (
         SELECT ranked.id FROM (
