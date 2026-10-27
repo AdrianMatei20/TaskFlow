@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { validate as isValidUUID } from 'uuid';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -46,63 +46,37 @@ export class CommentService {
     // the "must be a project member" check already matches what commenting requires.
     const issue: Issue = await this.issueService.findOneById(createCommentDto.issueId, userId);
 
-    try {
-      const author: User = await this.userService.findOneById(userId);
+    const author: User = await this.userService.findOneById(userId);
 
-      const comment: Comment = this.commentRepository.create({
-        body: createCommentDto.body,
-        issue,
-        author,
-        createdAt: new Date(),
-      });
+    const comment: Comment = this.commentRepository.create({
+      body: createCommentDto.body,
+      issue,
+      author,
+      createdAt: new Date(),
+    });
 
-      await this.commentRepository.save(comment);
+    await this.commentRepository.save(comment);
 
-      const createdComment: Comment = await this.commentRepository.findOne({ where: { id: comment.id }, relations: COMMENT_RELATIONS });
+    const createdComment: Comment = await this.commentRepository.findOne({ where: { id: comment.id }, relations: COMMENT_RELATIONS });
 
-      await this.loggerService.info(
-        LOG_MESSAGES.COMMENT.CREATE.SUCCESS(issue.id),
-        LOG_CONTEXTS.CommentService.create,
-        { createCommentDto, userId },
-      );
+    await this.loggerService.info(
+      LOG_MESSAGES.COMMENT.CREATE.SUCCESS(issue.id),
+      LOG_CONTEXTS.CommentService.create,
+      { createCommentDto, userId },
+    );
 
-      return createdComment;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.COMMENT.CREATE.FAILED_TO_CREATE_COMMENT(createCommentDto.issueId),
-        LOG_CONTEXTS.CommentService.create,
-        error.message,
-        { createCommentDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return createdComment;
   }
 
   async findAllByIssueId(issueId: string, userId: string): Promise<Comment[]> {
     // Reuses IssueService's own validation/membership check.
     await this.issueService.findOneById(issueId, userId);
 
-    try {
-      return await this.commentRepository.find({
-        where: { issue: { id: issueId } },
-        relations: COMMENT_RELATIONS,
-        order: { createdAt: 'ASC' },
-      });
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.COMMENT.FIND_ALL.FAILED_TO_RETRIEVE_COMMENTS(issueId),
-        LOG_CONTEXTS.CommentService.findAllByIssueId,
-        error.message,
-        { issueId, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return await this.commentRepository.find({
+      where: { issue: { id: issueId } },
+      relations: COMMENT_RELATIONS,
+      order: { createdAt: 'ASC' },
+    });
   }
 
   async update(commentId: string, updateCommentDto: UpdateCommentDto, userId: string): Promise<Comment> {
@@ -146,30 +120,17 @@ export class CommentService {
 
     comment.body = updateCommentDto.body;
 
-    try {
-      await this.commentRepository.save(comment);
+    await this.commentRepository.save(comment);
 
-      const updatedComment: Comment = await this.commentRepository.findOne({ where: { id: commentId }, relations: COMMENT_RELATIONS });
+    const updatedComment: Comment = await this.commentRepository.findOne({ where: { id: commentId }, relations: COMMENT_RELATIONS });
 
-      await this.loggerService.info(
-        LOG_MESSAGES.COMMENT.UPDATE.SUCCESS(commentId),
-        LOG_CONTEXTS.CommentService.update,
-        { commentId, updateCommentDto, userId },
-      );
+    await this.loggerService.info(
+      LOG_MESSAGES.COMMENT.UPDATE.SUCCESS(commentId),
+      LOG_CONTEXTS.CommentService.update,
+      { commentId, updateCommentDto, userId },
+    );
 
-      return updatedComment;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.COMMENT.UPDATE.FAILED_TO_UPDATE_COMMENT(commentId),
-        LOG_CONTEXTS.CommentService.update,
-        error.message,
-        { commentId, updateCommentDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return updatedComment;
   }
 
   async remove(commentId: string, userId: string): Promise<boolean> {
@@ -211,26 +172,13 @@ export class CommentService {
       });
     }
 
-    try {
-      await this.commentRepository.delete(commentId);
-      await this.loggerService.info(
-        LOG_MESSAGES.COMMENT.REMOVE.SUCCESS(commentId),
-        LOG_CONTEXTS.CommentService.remove,
-        { commentId, userId },
-      );
-      return true;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.COMMENT.REMOVE.FAILED_TO_DELETE_COMMENT(commentId),
-        LOG_CONTEXTS.CommentService.remove,
-        error.message,
-        { commentId, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    await this.commentRepository.delete(commentId);
+    await this.loggerService.info(
+      LOG_MESSAGES.COMMENT.REMOVE.SUCCESS(commentId),
+      LOG_CONTEXTS.CommentService.remove,
+      { commentId, userId },
+    );
+    return true;
   }
 
 }

@@ -1,4 +1,4 @@
-import { HttpStatus, INestApplication } from "@nestjs/common";
+import { HttpStatus, INestApplication, Logger } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 
 import { PassportModule } from "@nestjs/passport";
@@ -24,6 +24,7 @@ import { UserService } from "../../../src/resources/user/user.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
+import { LOG_CONTEXTS } from "../../../src/constants/log-contexts";
 import { getRonaldClarkRegisterUserDto, getLisaMitchellRegisterUserDto, getMichelleJohnsonRegisterUserDto } from "../../data/register-user";
 import { LogInUserDto } from "../../../src/auth/dto/log-in-user.dto";
 import { CreateProjectDto } from "src/resources/project/dto/create-project.dto";
@@ -43,6 +44,7 @@ describe('LabelController (e2e)', () => {
     let projectRepository: Repository<Project>;
     let userProjectRoleRepository: Repository<UserProjectRole>;
     let labelRepository: Repository<Label>;
+    let logRepository: Repository<Log>;
 
     let ownerCookie: string;
     let editorCookie: string;
@@ -83,6 +85,7 @@ describe('LabelController (e2e)', () => {
         projectRepository = moduleFixture.get<Repository<Project>>(getRepositoryToken(Project));
         userProjectRoleRepository = moduleFixture.get<Repository<UserProjectRole>>(getRepositoryToken(UserProjectRole));
         labelRepository = moduleFixture.get<Repository<Label>>(getRepositoryToken(Label));
+        logRepository = moduleFixture.get<Repository<Log>>(getRepositoryToken(Log));
 
         app.use(session({
             name: 'SESSION_ID',
@@ -221,6 +224,38 @@ describe('LabelController (e2e)', () => {
 
             expect(response.status).toBe(HttpStatus.OK);
             expect(response.body.data).toHaveLength(1);
+        });
+
+        // LabelService has no try/catch around the query, so the error reaches the global AllExceptionsFilter.
+        it('should return a generic 500 and log the error when the database fails', async () => {
+            jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+            jest.spyOn(labelRepository, 'find').mockRejectedValueOnce(new Error('SQLITE_BUSY: database is locked'));
+
+            const response = await request(app.getHttpServer())
+                .get('/label')
+                .query({ projectId })
+                .set('Cookie', viewerCookie);
+
+            expect(response.status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+            expect(response.body).toEqual({
+                statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+                message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
+            });
+            expect(JSON.stringify(response.body)).not.toContain('SQLITE_BUSY');
+
+            // The filter logs without awaiting, so poll briefly for the entry.
+            let log: Log = null;
+            for (let attempt = 0; attempt < 20 && !log; attempt++) {
+                log = await logRepository.findOne({ where: { context: LOG_CONTEXTS.AllExceptionsFilter } });
+                if (!log) await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            expect(log).toEqual(expect.objectContaining({
+                level: 'ERROR',
+                message: 'Unhandled error during GET /label: SQLITE_BUSY: database is locked',
+                metadata: expect.objectContaining({ operation: 'GET /label', errorName: 'Error' }),
+            }));
+
+            jest.restoreAllMocks();
         });
 
     });

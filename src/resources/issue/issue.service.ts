@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { validate as isValidUUID } from 'uuid';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -111,48 +111,35 @@ export class IssueService {
       ? await this.labelRepository.find({ where: { id: In(createIssueDto.labelIds), project: { id: project.id } } })
       : [];
 
-    try {
-      const now = new Date();
-      const issue: Issue = this.issueRepository.create({
-        title: createIssueDto.title,
-        description: createIssueDto.description,
-        type: createIssueDto.type,
-        priority: createIssueDto.priority,
-        project,
-        reporter,
-        assignee,
-        labels,
-        dueDate: createIssueDto.dueDate ?? null,
-        createdAt: now,
-        updatedAt: now,
-      });
+    const now = new Date();
+    const issue: Issue = this.issueRepository.create({
+      title: createIssueDto.title,
+      description: createIssueDto.description,
+      type: createIssueDto.type,
+      priority: createIssueDto.priority,
+      project,
+      reporter,
+      assignee,
+      labels,
+      dueDate: createIssueDto.dueDate ?? null,
+      createdAt: now,
+      updatedAt: now,
+    });
 
-      await this.issueRepository.save(issue);
+    await this.issueRepository.save(issue);
 
-      const createdIssue: Issue = await this.issueRepository.findOne({
-        where: { id: issue.id },
-        relations: ISSUE_RELATIONS,
-      });
+    const createdIssue: Issue = await this.issueRepository.findOne({
+      where: { id: issue.id },
+      relations: ISSUE_RELATIONS,
+    });
 
-      await this.loggerService.info(
-        LOG_MESSAGES.ISSUE.CREATE.SUCCESS(createdIssue.title, project.name),
-        LOG_CONTEXTS.IssueService.create,
-        { createIssueDto, userId },
-      );
+    await this.loggerService.info(
+      LOG_MESSAGES.ISSUE.CREATE.SUCCESS(createdIssue.title, project.name),
+      LOG_CONTEXTS.IssueService.create,
+      { createIssueDto, userId },
+    );
 
-      return createdIssue;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.ISSUE.CREATE.FAILED_TO_CREATE_ISSUE(createIssueDto.title),
-        LOG_CONTEXTS.IssueService.create,
-        error.message,
-        { createIssueDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return createdIssue;
   }
 
   async findAllByProjectId(projectId: string, userId: string): Promise<Issue[]> {
@@ -173,24 +160,11 @@ export class IssueService {
       });
     }
 
-    try {
-      return await this.issueRepository.find({
-        where: { project: { id: projectId } },
-        relations: ISSUE_RELATIONS,
-        order: { createdAt: 'DESC' },
-      });
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.ISSUE.FIND_ALL.FAILED_TO_RETRIEVE_ISSUES(projectId),
-        LOG_CONTEXTS.IssueService.findAllByProjectId,
-        error.message,
-        { projectId, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return await this.issueRepository.find({
+      where: { project: { id: projectId } },
+      relations: ISSUE_RELATIONS,
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async findOneById(issueId: string, userId: string): Promise<Issue> {
@@ -206,21 +180,7 @@ export class IssueService {
       });
     }
 
-    let issue: Issue = null;
-    try {
-      issue = await this.issueRepository.findOne({ where: { id: issueId }, relations: ISSUE_RELATIONS });
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.ISSUE.FIND_ONE_BY_ID.FAILED_TO_FIND_ISSUE(issueId),
-        LOG_CONTEXTS.IssueService.findOneById,
-        error.message,
-        { issueId, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const issue: Issue = await this.issueRepository.findOne({ where: { id: issueId }, relations: ISSUE_RELATIONS });
 
     if (!issue) {
       await this.loggerService.warn(
@@ -339,30 +299,17 @@ export class IssueService {
 
     issue.updatedAt = new Date();
 
-    try {
-      await this.issueRepository.save(issue);
+    await this.issueRepository.save(issue);
 
-      const updatedIssue: Issue = await this.issueRepository.findOne({ where: { id: issueId }, relations: ISSUE_RELATIONS });
+    const updatedIssue: Issue = await this.issueRepository.findOne({ where: { id: issueId }, relations: ISSUE_RELATIONS });
 
-      await this.loggerService.info(
-        LOG_MESSAGES.ISSUE.UPDATE.SUCCESS(updatedIssue.title),
-        LOG_CONTEXTS.IssueService.update,
-        { issueId, updateIssueDto, userId },
-      );
+    await this.loggerService.info(
+      LOG_MESSAGES.ISSUE.UPDATE.SUCCESS(updatedIssue.title),
+      LOG_CONTEXTS.IssueService.update,
+      { issueId, updateIssueDto, userId },
+    );
 
-      return updatedIssue;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.ISSUE.UPDATE.FAILED_TO_UPDATE_ISSUE(issueId),
-        LOG_CONTEXTS.IssueService.update,
-        error.message,
-        { issueId, updateIssueDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return updatedIssue;
   }
 
   async remove(issueId: string, userId: string): Promise<boolean> {
@@ -405,26 +352,13 @@ export class IssueService {
       });
     }
 
-    try {
-      await this.issueRepository.delete(issueId);
-      await this.loggerService.info(
-        LOG_MESSAGES.ISSUE.REMOVE.SUCCESS(issue.title),
-        LOG_CONTEXTS.IssueService.remove,
-        { issueId, userId },
-      );
-      return true;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.ISSUE.REMOVE.FAILED_TO_DELETE_ISSUE(issueId),
-        LOG_CONTEXTS.IssueService.remove,
-        error.message,
-        { issueId, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    await this.issueRepository.delete(issueId);
+    await this.loggerService.info(
+      LOG_MESSAGES.ISSUE.REMOVE.SUCCESS(issue.title),
+      LOG_CONTEXTS.IssueService.remove,
+      { issueId, userId },
+    );
+    return true;
   }
 
 }
