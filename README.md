@@ -18,6 +18,7 @@ Everything here is deliberately built end-to-end rather than stubbed: real guard
 - **Authorization**: two independent role layers — a user's global role (regular user vs. admin) and their per-project role (owner/admin/editor/viewer) — enforced via guards (`AuthenticatedGuard`, `GlobalAdminGuard`, `ProjectRoleGuard`) and service-level checks.
 - **Projects**: CRUD with ownership and membership, exposed over both REST and GraphQL.
 - **Validation**: a global `ValidationPipe` (registered as an `APP_PIPE` provider, so it covers REST, GraphQL and e2e tests) with `whitelist` + `transform`. DTOs use `class-validator` rules that mirror the database columns (lengths, UUIDs, enums, `#rrggbb` colors, dates converted via `class-transformer`), `PartialType` reuses create rules for updates, and a custom `@IsOptionalNonNullable()` rejects explicit `null` on non-nullable fields. Failures return one readable message per field and are logged to the `logs` table (property and rule names only, never submitted values).
+- **Error handling**: a global `@Catch()` exception filter (`AllExceptionsFilter`, registered as an `APP_FILTER` provider for both REST and GraphQL) is the single place unexpected errors are handled. Services only catch the failures they can act on (a cache miss falls back to the database, an email that can't be sent becomes a 503); everything else propagates and the filter logs it once to the `logs` table (with the route pattern or GraphQL operation and the user) and returns a generic 500, so internal details like database error messages never reach the client. Deliberate `HttpException`s pass through unchanged.
 - **Issue tracking**: `Issue` / `Label` / `Comment` resources with a type/status/priority workflow, assignment (restricted to project members), many-to-many labels, and a permission model where creating/editing issues and labels needs an OWNER/ADMIN/EDITOR project role, deleting needs OWNER/ADMIN, and commenting is open to any project member (including VIEWER).
 - **Caching**: Redis-backed cache (`cache-manager-ioredis-yet`) on hot read paths, with reads falling back to the database on a cache miss or cache-layer error rather than failing the request.
 - **Logging**: every significant service action (success, validation failure, not-found, forbidden, unexpected error) is written to a `logs` table with level/context/metadata, queryable via `GET /logger` with level/date/sort filters.
@@ -132,6 +133,7 @@ src/
     token/                 JWT-based verification/reset tokens
   shared/
     validation/           global ValidationPipe provider + custom validators
+    exceptions/           global exception filter (REST + GraphQL)
 test/
   e2e-tests/             REST + GraphQL end-to-end tests
   data/                  shared test fixtures

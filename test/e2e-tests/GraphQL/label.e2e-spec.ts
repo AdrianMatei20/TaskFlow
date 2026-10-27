@@ -1,4 +1,4 @@
-import { HttpStatus, INestApplication } from "@nestjs/common";
+import { HttpStatus, INestApplication, Logger } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 
 import { PassportModule } from "@nestjs/passport";
@@ -249,6 +249,33 @@ describe('GraphQL label (e2e)', () => {
 
             expect(response.status).toBe(HttpStatus.OK);
             expect(response.body.data.labels).toHaveLength(1);
+        });
+
+        // Without the global AllExceptionsFilter, Apollo would send the raw database error message to the client.
+        it('should return a generic error when the database fails', async () => {
+            jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+            jest.spyOn(labelRepository, 'find').mockRejectedValueOnce(new Error('SQLITE_BUSY: database is locked'));
+
+            const query = `
+                query labels($projectId: String!) {
+                    labels(projectId: $projectId) { id }
+                }
+            `;
+
+            const response = await request(app.getHttpServer())
+                .post('/graphql')
+                .send({ query, variables: { projectId } })
+                .set('Cookie', viewerCookie);
+
+            expect(response.status).toBe(HttpStatus.OK);
+            expect(response.body.errors[0].message).toBe(RETURN_MESSAGES.INTERNAL_SERVER_ERROR);
+            expect(response.body.errors[0].extensions.originalError).toEqual({
+                statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+                message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
+            });
+            expect(JSON.stringify(response.body)).not.toContain('SQLITE_BUSY');
+
+            jest.restoreAllMocks();
         });
 
     });

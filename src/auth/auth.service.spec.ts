@@ -4,7 +4,7 @@ import { UserService } from '../resources/user/user.service';
 import { EmailService } from 'src/services/email/email.service';
 import { TokenService } from 'src/services/token/token.service';
 import { LoggerService } from 'src/logger/logger.service';
-import { BadRequestException, ConflictException, HttpStatus, InternalServerErrorException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpStatus, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { getSanitizedRegisterUserDto, getJamesSmithRegisterUserDto, registerUserDtoPasswordsNotMatching } from 'test/data/register-user';
 import { RegisterUserDto } from 'src/resources/user/dto/register-user.dto';
 import { ResetPasswordService } from './reset-password/reset-password.service';
@@ -175,31 +175,14 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.create fails', async () => {
+    it('should let errors from userService.create propagate to the global exception filter', async () => {
       const registerUserDto: RegisterUserDto = getJamesSmithRegisterUserDto();
       (mockUserService.findOneByEmail as jest.Mock).mockResolvedValue(null);
       (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
       (mockUserService.create as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.registerUser(registerUserDto))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.REGISTER_USER.FAILED_TO_REGISTER_USER(registerUserDto.email, DATABASE_ERROR),
-        LOG_CONTEXTS.AuthService.registerUser,
-        DATABASE_ERROR,
-        { registerUserDto: getSanitizedRegisterUserDto(registerUserDto as RegisterUserDto) },
-      );
-
-      try {
-        await authService.registerUser(getJamesSmithRegisterUserDto());
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.registerUser(registerUserDto)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 503 ServiceUnavailable if emailService.sendRegistrationEmail fails', async () => {
@@ -229,6 +212,40 @@ describe('AuthService', () => {
           message: RETURN_MESSAGES.SERVICE_UNAVAILABLE,
         });
       }
+    });
+
+    it('should return 503 ServiceUnavailable if emailService.sendRegistrationEmail resolves to false', async () => {
+      const registerUserDto: RegisterUserDto = getJamesSmithRegisterUserDto();
+      (mockUserService.findOneByEmail as jest.Mock).mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      (mockUserService.create as jest.Mock).mockResolvedValue(userJamesSmith);
+      (mockTokenService.createToken as jest.Mock).mockReturnValue('token');
+      (mockEmailService.sendRegistrationEmail as jest.Mock).mockResolvedValue(false);
+
+      await expect(authService.registerUser(registerUserDto))
+        .rejects.toThrow(ServiceUnavailableException);
+      expect(mockLoggerService.error).toHaveBeenCalledWith(
+        LOG_MESSAGES.AUTH.REGISTER_USER.FAILED_TO_SEND_EMAIL(userJamesSmith.email, 'the email provider did not accept the message'),
+        LOG_CONTEXTS.AuthService.registerUser,
+        'the email provider did not accept the message',
+        { registerUserDto: getSanitizedRegisterUserDto(registerUserDto as RegisterUserDto) },
+      );
+      expect(mockLoggerService.info).not.toHaveBeenCalledWith(
+        LOG_MESSAGES.AUTH.REGISTER_USER.CONFIRMATION_EMAIL(userJamesSmith.email),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('should not send an email if sendConfirmationEmail is false', async () => {
+      (mockUserService.findOneByEmail as jest.Mock).mockResolvedValue(null);
+      (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
+      (mockUserService.create as jest.Mock).mockResolvedValue(userJamesSmith);
+
+      await authService.registerUser(getJamesSmithRegisterUserDto(), false);
+
+      expect(mockTokenService.createToken).not.toHaveBeenCalled();
+      expect(mockEmailService.sendRegistrationEmail).not.toHaveBeenCalled();
     });
 
     it('should call emailService.sendRegistrationEmail with the correct parameters', async () => {
@@ -290,28 +307,11 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.findOneById fails', async () => {
+    it('should let errors from userService.findOneById propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.verifyUser(userJamesSmith.id, 'token'))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.VERIFY_USER.FAILED_TO_FIND_USER(userJamesSmith.id),
-        LOG_CONTEXTS.AuthService.verifyUser,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id },
-      );
-
-      try {
-        await authService.verifyUser(userJamesSmith.id, 'token');
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.verifyUser(userJamesSmith.id, 'token')).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return successful message if user is not found', async () => {
@@ -358,32 +358,15 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.markUserAccountAsVerified fails', async () => {
+    it('should let errors from userService.markUserAccountAsVerified propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       mockTokenService.verifyToken.mockImplementationOnce(() => {
         return true;
       });
       (mockUserService.markUserAccountAsVerified as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.verifyUser(userJamesSmith.id, 'token'))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.VERIFY_USER.FAILED_TO_VERIFY_USER,
-        LOG_CONTEXTS.AuthService.verifyUser,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id, token: 'token' },
-      );
-
-      try {
-        await authService.verifyUser(userJamesSmith.id, 'token');
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.verifyUser(userJamesSmith.id, 'token')).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 200 Ok and a confirmation message if all goes well', async () => {
@@ -433,28 +416,11 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.findOneById fails', async () => {
+    it('should let errors from userService.findOneById propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.sendResetPasswordEmail(userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.FAILED_TO_FIND_USER(userJamesSmith.id),
-        LOG_CONTEXTS.AuthService.sendResetPasswordEmail,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id },
-      );
-
-      try {
-        await authService.sendResetPasswordEmail(userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.sendResetPasswordEmail(userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 200 Ok and a confirmation message if user is not found', async () => {
@@ -475,29 +441,12 @@ describe('AuthService', () => {
       );
     });
 
-    it('should return 500 InternalServerError if TokenService.createResetToken fails', async () => {
+    it('should let errors from TokenService.createResetToken propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockResetPasswordService.createResetToken as jest.Mock).mockRejectedValue(new Error(ERROR));
 
-      await expect(authService.sendResetPasswordEmail(userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.FAILED_TO_SEND_RESET_PASSWORD_EMAIL(userJamesSmith.email, ERROR),
-        LOG_CONTEXTS.AuthService.sendResetPasswordEmail,
-        ERROR,
-        { user: userJamesSmith },
-      );
-
-      try {
-        await authService.sendResetPasswordEmail(userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.sendResetPasswordEmail(userJamesSmith.id)).rejects.toThrow(ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 503 ServiceUnavailable if EmailService.sendResetPasswordEmail fails', async () => {
@@ -555,28 +504,11 @@ describe('AuthService', () => {
 
   describe('sendForgotPasswordEmail', () => {
 
-    it('should return 500 InternalServerError if userService.findOneByEmail fails', async () => {
+    it('should let errors from userService.findOneByEmail propagate to the global exception filter', async () => {
       (mockUserService.findOneByEmail as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.sendForgotPasswordEmail(forgotPasswordDto))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.FAILED_TO_FIND_USER(forgotPasswordDto.email),
-        LOG_CONTEXTS.AuthService.sendForgotPasswordEmail,
-        DATABASE_ERROR,
-        { forgotPasswordDto: forgotPasswordDto },
-      );
-
-      try {
-        await authService.sendForgotPasswordEmail(forgotPasswordDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.sendForgotPasswordEmail(forgotPasswordDto)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return a confirmation message if user is not found', async () => {
@@ -597,29 +529,12 @@ describe('AuthService', () => {
       );
     });
 
-    it('should return 500 InternalServerError if TokenService.createResetToken fails', async () => {
+    it('should let errors from TokenService.createResetToken propagate to the global exception filter', async () => {
       (mockUserService.findOneByEmail as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockResetPasswordService.createResetToken as jest.Mock).mockRejectedValue(new Error(ERROR));
 
-      await expect(authService.sendForgotPasswordEmail(forgotPasswordDto))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.FAILED_TO_SEND_RESET_PASSWORD_EMAIL(forgotPasswordDto.email, ERROR),
-        LOG_CONTEXTS.AuthService.sendForgotPasswordEmail,
-        ERROR,
-        { forgotPasswordDto: forgotPasswordDto, user: userJamesSmith },
-      );
-
-      try {
-        await authService.sendForgotPasswordEmail(forgotPasswordDto);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.sendForgotPasswordEmail(forgotPasswordDto)).rejects.toThrow(ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 503 ServiceUnavailable if EmailService.sendResetPasswordEmail fails', async () => {
@@ -698,28 +613,11 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if UserService.findOneById fails', async () => {
+    it('should let errors from UserService.findOneById propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto()))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED_TO_FIND_USER(userJamesSmith.id),
-        LOG_CONTEXTS.AuthService.resetPassword,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id, token: 'token', resetPasswordDto: getResetPasswordDto() },
-      );
-
-      try {
-        await authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto());
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto())).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return a confirmation message if user is not found', async () => {
@@ -740,29 +638,12 @@ describe('AuthService', () => {
       );
     });
 
-    it('should return 500 InternalServerError if ResetPasswordService.validateResetToken fails', async () => {
+    it('should let errors from ResetPasswordService.validateResetToken propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockResetPasswordService.validateResetToken as jest.Mock).mockRejectedValue(new Error(ERROR));
 
-      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto()))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED_TO_VALIDATE_TOKEN('token'),
-        LOG_CONTEXTS.AuthService.resetPassword,
-        ERROR,
-        { userId: userJamesSmith.id, token: 'token', resetPasswordDto: getResetPasswordDto() },
-      );
-
-      try {
-        await authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto());
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto())).rejects.toThrow(ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 400 BadRequest for invalid or expired tokens', async () => {
@@ -813,85 +694,34 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if ResetPasswordService.findByToken fails', async () => {
+    it('should let errors from ResetPasswordService.findByToken propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockResetPasswordService.validateResetToken as jest.Mock).mockResolvedValue(true);
       (mockResetPasswordService.findByToken as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto()))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED,
-        LOG_CONTEXTS.AuthService.resetPassword,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id, token: 'token', resetPasswordDto: getResetPasswordDto() },
-      );
-
-      try {
-        await authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto());
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto())).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
-    it('should return 500 InternalServerError if UserService.update fails', async () => {
+    it('should let errors from UserService.update propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockResetPasswordService.validateResetToken as jest.Mock).mockResolvedValue(true);
       (mockResetPasswordService.findByToken as jest.Mock).mockResolvedValue(resetPassword);
       (mockUserService.update as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto()))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED,
-        LOG_CONTEXTS.AuthService.resetPassword,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id, token: 'token', resetPasswordDto: getResetPasswordDto() },
-      );
-
-      try {
-        await authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto());
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto())).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
-    it('should return 500 InternalServerError if ResetPasswordService.invalidateResetToken fails', async () => {
+    it('should let errors from ResetPasswordService.invalidateResetToken propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockResetPasswordService.validateResetToken as jest.Mock).mockResolvedValue(true);
       (mockResetPasswordService.findByToken as jest.Mock).mockResolvedValue(resetPassword);
       (mockUserService.update as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockResetPasswordService.invalidateResetToken as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto()))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED,
-        LOG_CONTEXTS.AuthService.resetPassword,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id, token: 'token', resetPasswordDto: getResetPasswordDto() },
-      );
-
-      try {
-        await authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto());
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.resetPassword(userJamesSmith.id, 'token', getResetPasswordDto())).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should reset user\'s password if all goes well', async () => {
@@ -943,28 +773,11 @@ describe('AuthService', () => {
 
   describe('findByEmail', () => {
 
-    it('should return 500 InternalServerError if UserService.findOneByEmail fails', async () => {
+    it('should let errors from UserService.findOneByEmail propagate to the global exception filter', async () => {
       (mockUserService.findOneByEmail as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.findByEmail(userJamesSmith.email))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.FIND_BY_EMAIL.FAILED_TO_FIND_USER(userJamesSmith.email),
-        LOG_CONTEXTS.AuthService.findByEmail,
-        DATABASE_ERROR,
-        { email: userJamesSmith.email },
-      );
-
-      try {
-        await authService.findByEmail(userJamesSmith.email);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.findByEmail(userJamesSmith.email)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 404 NotFound if user is not found', async () => {
@@ -1023,28 +836,11 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.findOneById fails', async () => {
+    it('should let errors from userService.findOneById propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.deleteUser(userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.DELETE_USER.FAILED_TO_FIND_USER(userJamesSmith.id),
-        LOG_CONTEXTS.AuthService.deleteUser,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id },
-      );
-
-      try {
-        await authService.deleteUser(userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.deleteUser(userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 404 NotFound if user is not found', async () => {
@@ -1070,31 +866,12 @@ describe('AuthService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.remove fails', async () => {
+    it('should let errors from userService.remove propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockUserService.remove as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(authService.deleteUser(userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-
-      expect(mockUserService.remove).toHaveBeenCalledWith(userJamesSmith.id);
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.AUTH.DELETE_USER.FAILED_TO_DELETE_USER,
-        LOG_CONTEXTS.AuthService.deleteUser,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id, user: userJamesSmith },
-      );
-
-      try {
-        await authService.deleteUser(userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(authService.deleteUser(userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should call UserService.remove and return the correct message if all goes well', async () => {

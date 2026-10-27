@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { validate as isValidUUID } from 'uuid';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -67,37 +67,24 @@ export class LabelService {
       });
     }
 
-    try {
-      const label: Label = this.labelRepository.create({
-        name: createLabelDto.name,
-        color: createLabelDto.color,
-        project,
-        createdAt: new Date(),
-      });
+    const label: Label = this.labelRepository.create({
+      name: createLabelDto.name,
+      color: createLabelDto.color,
+      project,
+      createdAt: new Date(),
+    });
 
-      await this.labelRepository.save(label);
+    await this.labelRepository.save(label);
 
-      const createdLabel: Label = await this.labelRepository.findOne({ where: { id: label.id }, relations: LABEL_RELATIONS });
+    const createdLabel: Label = await this.labelRepository.findOne({ where: { id: label.id }, relations: LABEL_RELATIONS });
 
-      await this.loggerService.info(
-        LOG_MESSAGES.LABEL.CREATE.SUCCESS(createdLabel.name, project.name),
-        LOG_CONTEXTS.LabelService.create,
-        { createLabelDto, userId },
-      );
+    await this.loggerService.info(
+      LOG_MESSAGES.LABEL.CREATE.SUCCESS(createdLabel.name, project.name),
+      LOG_CONTEXTS.LabelService.create,
+      { createLabelDto, userId },
+    );
 
-      return createdLabel;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.LABEL.CREATE.FAILED_TO_CREATE_LABEL(createLabelDto.name),
-        LOG_CONTEXTS.LabelService.create,
-        error.message,
-        { createLabelDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return createdLabel;
   }
 
   async findAllByProjectId(projectId: string, userId: string): Promise<Label[]> {
@@ -117,24 +104,11 @@ export class LabelService {
       });
     }
 
-    try {
-      return await this.labelRepository.find({
-        where: { project: { id: projectId } },
-        relations: LABEL_RELATIONS,
-        order: { name: 'ASC' },
-      });
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.LABEL.FIND_ALL.FAILED_TO_RETRIEVE_LABELS(projectId),
-        LOG_CONTEXTS.LabelService.findAllByProjectId,
-        error.message,
-        { projectId, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return await this.labelRepository.find({
+      where: { project: { id: projectId } },
+      relations: LABEL_RELATIONS,
+      order: { name: 'ASC' },
+    });
   }
 
   async findOneById(labelId: string, userId: string): Promise<Label> {
@@ -223,30 +197,17 @@ export class LabelService {
     if (updateLabelDto.name !== undefined) label.name = updateLabelDto.name;
     if (updateLabelDto.color !== undefined) label.color = updateLabelDto.color;
 
-    try {
-      await this.labelRepository.save(label);
+    await this.labelRepository.save(label);
 
-      const updatedLabel: Label = await this.labelRepository.findOne({ where: { id: labelId }, relations: LABEL_RELATIONS });
+    const updatedLabel: Label = await this.labelRepository.findOne({ where: { id: labelId }, relations: LABEL_RELATIONS });
 
-      await this.loggerService.info(
-        LOG_MESSAGES.LABEL.UPDATE.SUCCESS(updatedLabel.name),
-        LOG_CONTEXTS.LabelService.update,
-        { labelId, updateLabelDto, userId },
-      );
+    await this.loggerService.info(
+      LOG_MESSAGES.LABEL.UPDATE.SUCCESS(updatedLabel.name),
+      LOG_CONTEXTS.LabelService.update,
+      { labelId, updateLabelDto, userId },
+    );
 
-      return updatedLabel;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.LABEL.UPDATE.FAILED_TO_UPDATE_LABEL(labelId),
-        LOG_CONTEXTS.LabelService.update,
-        error.message,
-        { labelId, updateLabelDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return updatedLabel;
   }
 
   async remove(labelId: string, userId: string): Promise<boolean> {
@@ -289,26 +250,13 @@ export class LabelService {
       });
     }
 
-    try {
-      await this.labelRepository.delete(labelId);
-      await this.loggerService.info(
-        LOG_MESSAGES.LABEL.REMOVE.SUCCESS(label.name),
-        LOG_CONTEXTS.LabelService.remove,
-        { labelId, userId },
-      );
-      return true;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.LABEL.REMOVE.FAILED_TO_DELETE_LABEL(labelId),
-        LOG_CONTEXTS.LabelService.remove,
-        error.message,
-        { labelId, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    await this.labelRepository.delete(labelId);
+    await this.loggerService.info(
+      LOG_MESSAGES.LABEL.REMOVE.SUCCESS(label.name),
+      LOG_CONTEXTS.LabelService.remove,
+      { labelId, userId },
+    );
+    return true;
   }
 
 }

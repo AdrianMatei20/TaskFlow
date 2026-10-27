@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProjectService } from './project.service';
 import { UserService } from '../user/user.service';
-import { BadRequestException, HttpStatus, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, HttpStatus, NotFoundException } from '@nestjs/common';
 import { Project } from './entities/project.entity';
 import { UserProjectRole } from './entities/user-project-role.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -118,29 +118,11 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.findOneById fails', async () => {
+    it('should let errors from userService.findOneById propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.create(createProjectDto, userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.FAILED_TO_FIND_USER(userJamesSmith.id),
-        LOG_CONTEXTS.ProjectService.create,
-        DATABASE_ERROR,
-        { createProjectDto: createProjectDto, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.create(createProjectDto, userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 404 NotFound for non-existing user', async () => {
@@ -167,62 +149,26 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if projectRepository.create fails', async () => {
+    it('should let errors from projectRepository.create propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockProjectRepository.create as jest.Mock).mockImplementation(() => { throw new Error(DATABASE_ERROR); });
 
-      await expect(projectService.create(createProjectDto, userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.FAILED_TO_CREATE_PROJECT(createProjectDto.name),
-        LOG_CONTEXTS.ProjectService.create,
-        DATABASE_ERROR,
-        { createProjectDto, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.create(createProjectDto, userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
-    it('should return 500 InternalServerError if projectRepository.save fails', async () => {
+    it('should let errors from projectRepository.save propagate to the global exception filter', async () => {
       project.userProjectRoles = [userProjectRole];
 
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockProjectRepository.create as jest.Mock).mockResolvedValue(project);
       (mockProjectRepository.save as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.create(createProjectDto, userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.FAILED_TO_CREATE_PROJECT(createProjectDto.name),
-        LOG_CONTEXTS.ProjectService.create,
-        DATABASE_ERROR,
-        { createProjectDto, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.create(createProjectDto, userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
-    it('should return 500 InternalServerError if userProjectRoleRepository.save fails', async () => {
+    it('should let errors from userProjectRoleRepository.save propagate to the global exception filter', async () => {
       project.userProjectRoles = [userProjectRole];
 
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
@@ -230,29 +176,11 @@ describe('ProjectService', () => {
       (mockProjectRepository.save as jest.Mock).mockResolvedValue(project);
       (mockUserProjectRoleRepository.save as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.create(createProjectDto, userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.FAILED_TO_CREATE_PROJECT(createProjectDto.name),
-        LOG_CONTEXTS.ProjectService.create,
-        DATABASE_ERROR,
-        { createProjectDto, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.create(createProjectDto, userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
-    it('should return 500 InternalServerError if projectRepository.findOne fails', async () => {
+    it('should let errors from projectRepository.findOne propagate to the global exception filter', async () => {
       project.userProjectRoles = [userProjectRole];
 
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
@@ -261,26 +189,8 @@ describe('ProjectService', () => {
       (mockUserProjectRoleRepository.save as jest.Mock).mockResolvedValue(project);
       (mockProjectRepository.findOne as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.create(createProjectDto, userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.CREATE.FAILED_TO_CREATE_PROJECT(createProjectDto.name),
-        LOG_CONTEXTS.ProjectService.create,
-        DATABASE_ERROR,
-        { createProjectDto, userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.create(createProjectDto, userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.create(createProjectDto, userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return created project if all goes well', async () => {
@@ -351,29 +261,11 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userService.findOneById fails', async () => {
+    it('should let errors from userService.findOneById propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.findAllByUserId(userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.FIND_ALL_BY_USER_ID.FAILED_TO_FIND_USER(userJamesSmith.id),
-        LOG_CONTEXTS.ProjectService.findAllByUserId,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.findAllByUserId(userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.findAllByUserId(userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 404 NotFound for non-existing user', async () => {
@@ -400,30 +292,12 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if userProjectRoleRepository.find fails', async () => {
+    it('should let errors from userProjectRoleRepository.find propagate to the global exception filter', async () => {
       (mockUserService.findOneById as jest.Mock).mockResolvedValue(userJamesSmith);
       (mockUserProjectRoleRepository.find as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.findAllByUserId(userJamesSmith.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.FIND_ALL_BY_USER_ID.FAILED_TO_RETRIEVE_PROJECTS,
-        LOG_CONTEXTS.ProjectService.findAllByUserId,
-        DATABASE_ERROR,
-        { userId: userJamesSmith.id },
-      );
-
-      try {
-        await projectService.findAllByUserId(userJamesSmith.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.findAllByUserId(userJamesSmith.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return empty list when user exists and has no projects', async () => {
@@ -487,62 +361,20 @@ describe('ProjectService', () => {
       expect(result).toEqual(projectWithJamesOwnerAndChristopherMember);
     });
 
-    it('should return 500 InternalServerError if both cache search and db search fails', async () => {
+    it('should let errors from both cache search and db search propagate to the global exception filter', async () => {
       (mockCacheService.get as jest.Mock).mockRejectedValue(new Error(CACHE_ERROR));
       (mockProjectRepository.findOne as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.findOneById(project.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.warn).toHaveBeenCalled();
-      expect(mockLoggerService.warn).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.FIND_ONE_BY_ID.FAILED_TO_RETRIEVE_PROJECT_FROM_CACHE(project.id),
-        LOG_CONTEXTS.ProjectService.findOneById,
-        CACHE_ERROR,
-      );
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.FIND_ONE_BY_ID.FAILED_TO_FIND_PROJECT(project.id),
-        LOG_CONTEXTS.ProjectService.findOneById,
-        DATABASE_ERROR,
-        { projectId: project.id },
-      );
-
-      try {
-        await projectService.findOneById(project.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.findOneById(project.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
-    it('should return 500 InternalServerError if project is not in cache and db search fails', async () => {
+    it('should let errors from project is not in cache and db search propagate to the global exception filter', async () => {
       (mockCacheService.get as jest.Mock).mockReturnValue(null);
       (mockProjectRepository.findOne as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.findOneById(project.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.FIND_ONE_BY_ID.FAILED_TO_FIND_PROJECT(project.id),
-        LOG_CONTEXTS.ProjectService.findOneById,
-        DATABASE_ERROR,
-        { projectId: project.id },
-      );
-
-      try {
-        await projectService.findOneById(project.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.findOneById(project.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 404 NotFound if cache search fails and project is not found in db', async () => {
@@ -662,29 +494,11 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if projectRepository.findOne fails', async () => {
+    it('should let errors from projectRepository.findOne propagate to the global exception filter', async () => {
       (mockProjectRepository.findOne as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.update(project.id, updateProjectDto))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.UPDATE.FAILED_TO_FIND_PROJECT(project.id),
-        LOG_CONTEXTS.ProjectService.update,
-        DATABASE_ERROR,
-        { projectId: project.id, updateProjectDto },
-      );
-
-      try {
-        await projectService.findOneById(project.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.update(project.id, updateProjectDto)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 404 NotFound for non-existing project', async () => {
@@ -735,30 +549,12 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if projectRepository.update fails', async () => {
+    it('should let errors from projectRepository.update propagate to the global exception filter', async () => {
       (mockProjectRepository.findOne as jest.Mock).mockResolvedValue(project);
       (mockProjectRepository.update as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.update(project.id, updateProjectDto))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.UPDATE.FAILED_TO_UPDATE_PROJECT(project.name),
-        LOG_CONTEXTS.ProjectService.update,
-        DATABASE_ERROR,
-        { projectId: project.id, project, updateProjectDto },
-      );
-
-      try {
-        await projectService.findOneById(project.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.update(project.id, updateProjectDto)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return updated project if only the name changes', async () => {
@@ -874,29 +670,11 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if projectRepository.findOne fails', async () => {
+    it('should let errors from projectRepository.findOne propagate to the global exception filter', async () => {
       (mockProjectRepository.findOne as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.remove(project.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.REMOVE.FAILED_TO_FIND_PROJECT(project.id),
-        LOG_CONTEXTS.ProjectService.remove,
-        DATABASE_ERROR,
-        { projectId: project.id },
-      );
-
-      try {
-        await projectService.remove(project.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.remove(project.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return 404 NotFound for non-existing project', async () => {
@@ -923,30 +701,12 @@ describe('ProjectService', () => {
       }
     });
 
-    it('should return 500 InternalServerError if delete fails', async () => {
+    it('should let errors from delete propagate to the global exception filter', async () => {
       (mockProjectRepository.findOne as jest.Mock).mockResolvedValue(project);
       (mockProjectRepository.delete as jest.Mock).mockRejectedValue(new Error(DATABASE_ERROR));
 
-      await expect(projectService.remove(project.id))
-        .rejects.toThrow(InternalServerErrorException);
-      expect(mockLoggerService.error).toHaveBeenCalled();
-      expect(mockLoggerService.error).toHaveBeenCalledWith(
-        LOG_MESSAGES.PROJECT.REMOVE.FAILED_TO_DELETE_PROJECT(project.id),
-        LOG_CONTEXTS.ProjectService.remove,
-        DATABASE_ERROR,
-        { projectId: project.id, project },
-      );
-
-      try {
-        await projectService.remove(project.id);
-      } catch (error) {
-        expect(error).toBeInstanceOf(InternalServerErrorException);
-        expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-        expect(error.getResponse()).toEqual({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
+      await expect(projectService.remove(project.id)).rejects.toThrow(DATABASE_ERROR);
+      expect(mockLoggerService.error).not.toHaveBeenCalled();
     });
 
     it('should return true if delete succeeds', async () => {

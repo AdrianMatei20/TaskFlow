@@ -59,5 +59,6 @@ export const LOG_CONTEXTS = {
     },
 
     ValidationPipe: 'ValidationPipe',
+    AllExceptionsFilter: 'AllExceptionsFilter',
 
   };

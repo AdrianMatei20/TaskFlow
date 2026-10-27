@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpStatus, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { validate as isValidUUID } from 'uuid';
 import { compare, hash } from 'bcrypt';
 
@@ -32,6 +32,24 @@ export class AuthService {
     private readonly resetPasswordService: ResetPasswordService,
     private readonly loggerService: LoggerService,
   ) { }
+
+  // A failed email is a known failure mode (503), unlike other errors, which the global exception filter turns into a 500.
+  // EmailService reports failure by resolving to false; a rejected promise is treated the same way.
+  private async sendEmailOrFail(email: Promise<boolean>, logMessage: (reason: string) => string, context: string, metadata: object): Promise<void> {
+    const reason: string | null = await email.then(
+      (sent) => (sent ? null : 'the email provider did not accept the message'),
+      (error) => error.message,
+    );
+    if (reason === null) {
+      return;
+    }
+
+    await this.loggerService.error(logMessage(reason), context, reason, metadata);
+    throw new ServiceUnavailableException({
+      statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+      message: RETURN_MESSAGES.SERVICE_UNAVAILABLE,
+    });
+  }
 
   async validateUser(user: LogInUserDto) {
     var foundUser: User = null;
@@ -88,60 +106,36 @@ export class AuthService {
       });
     }
 
-    // Create new user
-    try {
-      registerUserDto.password = await hash(registerUserDto.password, 12);
-      const user: User = await this.userService.create(registerUserDto);
+    // Create new user (unexpected errors are logged and turned into a 500 by the global exception filter)
+    registerUserDto.password = await hash(registerUserDto.password, 12);
+    const user: User = await this.userService.create(registerUserDto);
+    await this.loggerService.info(
+      LOG_MESSAGES.AUTH.REGISTER_USER.SUCCESS(user.firstname, user.lastname, user.email),
+      LOG_CONTEXTS.AuthService.registerUser,
+      { registerUserDto: sanitizedRegisterUserDto, user: new AdminUserDto(user) },
+    );
+
+    if (sendConfirmationEmail) {
+      const payload = { id: user.id, email: user.email, firstname: user.firstname, lastname: user.lastname };
+      const token: string = this.tokenService.createToken(payload);
+      const link: string = 'http://localhost:3001/auth/verify-user/' + user.id + "/" + token;
+      await this.sendEmailOrFail(
+        this.emailService.sendRegistrationEmail(user.email, user.firstname + " " + user.lastname, link),
+        (reason) => LOG_MESSAGES.AUTH.REGISTER_USER.FAILED_TO_SEND_EMAIL(user.email, reason),
+        LOG_CONTEXTS.AuthService.registerUser,
+        { registerUserDto: sanitizedRegisterUserDto },
+      );
       await this.loggerService.info(
-        LOG_MESSAGES.AUTH.REGISTER_USER.SUCCESS(user.firstname, user.lastname, user.email),
+        LOG_MESSAGES.AUTH.REGISTER_USER.CONFIRMATION_EMAIL(user.email),
         LOG_CONTEXTS.AuthService.registerUser,
         { registerUserDto: sanitizedRegisterUserDto, user: new AdminUserDto(user) },
       );
-
-      try {
-        var payload = { id: user.id, email: user.email, firstname: user.firstname, lastname: user.lastname };
-        var token: string = this.tokenService.createToken(payload);
-        var link: string = 'http://localhost:3001/auth/verify-user/' + user.id + "/" + token;
-        if (sendConfirmationEmail && await this.emailService.sendRegistrationEmail(user.email, user.firstname + " " + user.lastname, link)) {
-          await this.loggerService.info(
-            LOG_MESSAGES.AUTH.REGISTER_USER.CONFIRMATION_EMAIL(user.email),
-            LOG_CONTEXTS.AuthService.registerUser,
-            { registerUserDto: sanitizedRegisterUserDto, user: new AdminUserDto(user) },
-          );
-          return {
-            statusCode: HttpStatus.OK,
-            message: RETURN_MESSAGES.OK.REGISTRATION_EMAIL_SENT,
-          };
-        }
-      } catch (error) {
-        throw new ServiceUnavailableException(error.message);
-      }
-
-    } catch (error) {
-      if (error instanceof ServiceUnavailableException) {
-        await this.loggerService.error(
-          LOG_MESSAGES.AUTH.REGISTER_USER.FAILED_TO_SEND_EMAIL(registerUserDto.email, error.message),
-          LOG_CONTEXTS.AuthService.registerUser,
-          error.message,
-          { registerUserDto: sanitizedRegisterUserDto },
-        );
-        throw new ServiceUnavailableException({
-          statusCode: HttpStatus.SERVICE_UNAVAILABLE,
-          message: RETURN_MESSAGES.SERVICE_UNAVAILABLE,
-        });
-      } else {
-        await this.loggerService.error(
-          LOG_MESSAGES.AUTH.REGISTER_USER.FAILED_TO_REGISTER_USER(registerUserDto.email, error.message),
-          LOG_CONTEXTS.AuthService.registerUser,
-          error.message,
-          { registerUserDto: sanitizedRegisterUserDto },
-        );
-        throw new InternalServerErrorException({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      }
     }
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: RETURN_MESSAGES.OK.REGISTRATION_EMAIL_SENT,
+    };
   }
 
   async verifyUser(userId: string, token: string): Promise<SimpleMessageDto> {
@@ -159,22 +153,7 @@ export class AuthService {
     }
 
     // Check if the user exists
-    var user: User = null;
-    try {
-      user = await this.userService.findOneById(userId);
-    }
-    catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.VERIFY_USER.FAILED_TO_FIND_USER(userId),
-        LOG_CONTEXTS.AuthService.verifyUser,
-        error.message,
-        { userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneById(userId);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.AUTH.VERIFY_USER.USER_NOT_FOUND(userId),
@@ -203,21 +182,7 @@ export class AuthService {
     }
 
     // Mark the account as verified
-    var isUpdated: User = null;
-    try {
-      isUpdated = await this.userService.markUserAccountAsVerified(user);
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.VERIFY_USER.FAILED_TO_VERIFY_USER,
-        LOG_CONTEXTS.AuthService.verifyUser,
-        error.message,
-        { userId, token },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const isUpdated: User = await this.userService.markUserAccountAsVerified(user);
 
     if (isUpdated) {
       this.loggerService.info(
@@ -247,22 +212,7 @@ export class AuthService {
     }
 
     // Check if the user exists
-    var user: User = null;
-    try {
-      user = await this.userService.findOneById(userId);
-    }
-    catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.FAILED_TO_FIND_USER(userId),
-        LOG_CONTEXTS.AuthService.sendResetPasswordEmail,
-        error.message,
-        { userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneById(userId);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.USER_NOT_FOUND(userId),
@@ -275,65 +225,28 @@ export class AuthService {
       }
     }
 
-    try {
-      let link: string = '';
-      try {
-        const token: string = await this.resetPasswordService.createResetToken(user.id);
-        link = "http://localhost:3001/auth/reset-password/" + user.id + "/" + token;
-      } catch (error) {
-        throw new InternalServerErrorException(error.message);
-      }
-
-      if (await this.emailService.sendResetPasswordEmail(user.email, user.firstname + " " + user.lastname, link)) {
-        await this.loggerService.info(
-          LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.SUCCESS(user.email),
-          LOG_CONTEXTS.AuthService.sendResetPasswordEmail,
-          { user },
-        );
-        return {
-          statusCode: HttpStatus.OK,
-          message: RETURN_MESSAGES.OK.RESET_PASSWORD_EMAIL_SENT,
-        };
-      }
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.FAILED_TO_SEND_RESET_PASSWORD_EMAIL(user.email, error.message),
-        LOG_CONTEXTS.AuthService.sendResetPasswordEmail,
-        error.message,
-        { user },
-      );
-      if (error instanceof InternalServerErrorException) {
-        throw new InternalServerErrorException({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      } else {
-        throw new ServiceUnavailableException({
-          statusCode: HttpStatus.SERVICE_UNAVAILABLE,
-          message: RETURN_MESSAGES.SERVICE_UNAVAILABLE,
-        });
-      }
-    }
+    const token: string = await this.resetPasswordService.createResetToken(user.id);
+    const link: string = "http://localhost:3001/auth/reset-password/" + user.id + "/" + token;
+    await this.sendEmailOrFail(
+      this.emailService.sendResetPasswordEmail(user.email, user.firstname + " " + user.lastname, link),
+      (reason) => LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.FAILED_TO_SEND_RESET_PASSWORD_EMAIL(user.email, reason),
+      LOG_CONTEXTS.AuthService.sendResetPasswordEmail,
+      { user },
+    );
+    await this.loggerService.info(
+      LOG_MESSAGES.AUTH.SEND_RESET_PASSWORD_EMAIL.SUCCESS(user.email),
+      LOG_CONTEXTS.AuthService.sendResetPasswordEmail,
+      { user },
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: RETURN_MESSAGES.OK.RESET_PASSWORD_EMAIL_SENT,
+    };
   }
 
   async sendForgotPasswordEmail(forgotPasswordDto: ForgotPasswordDto): Promise<SimpleMessageDto> {
     // Check if the user exists
-    var user: User = null;
-    try {
-      user = await this.userService.findOneByEmail(forgotPasswordDto.email);
-    }
-    catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.FAILED_TO_FIND_USER(forgotPasswordDto.email),
-        LOG_CONTEXTS.AuthService.sendForgotPasswordEmail,
-        error.message,
-        { forgotPasswordDto },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneByEmail(forgotPasswordDto.email);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.USER_NOT_FOUND(forgotPasswordDto.email),
@@ -346,45 +259,23 @@ export class AuthService {
       }
     }
 
-    try {
-      let link: string = '';
-      try {
-        const token: string = await this.resetPasswordService.createResetToken(user.id);
-        link = "http://localhost:3001/auth/reset-password/" + user.id + "/" + token;
-      } catch (error) {
-        throw new InternalServerErrorException(error.message);
-      }
-
-      if (await this.emailService.sendResetPasswordEmail(user.email, user.firstname + " " + user.lastname, link)) {
-        await this.loggerService.info(
-          LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.SUCCESS(user.email),
-          LOG_CONTEXTS.AuthService.sendForgotPasswordEmail,
-          { forgotPasswordDto, user },
-        );
-        return {
-          statusCode: HttpStatus.OK,
-          message: RETURN_MESSAGES.OK.FORGOT_PASSWORD_EMAIL_SENT,
-        }
-      }
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.FAILED_TO_SEND_RESET_PASSWORD_EMAIL(forgotPasswordDto.email, error.message),
-        LOG_CONTEXTS.AuthService.sendForgotPasswordEmail,
-        error.message,
-        { forgotPasswordDto, user }
-      );
-      if (error instanceof InternalServerErrorException) {
-        throw new InternalServerErrorException({
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-          message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-        });
-      } else {
-        throw new ServiceUnavailableException({
-          statusCode: HttpStatus.SERVICE_UNAVAILABLE,
-          message: RETURN_MESSAGES.SERVICE_UNAVAILABLE,
-        });
-      }
-    }
+    const token: string = await this.resetPasswordService.createResetToken(user.id);
+    const link: string = "http://localhost:3001/auth/reset-password/" + user.id + "/" + token;
+    await this.sendEmailOrFail(
+      this.emailService.sendResetPasswordEmail(user.email, user.firstname + " " + user.lastname, link),
+      (reason) => LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.FAILED_TO_SEND_RESET_PASSWORD_EMAIL(forgotPasswordDto.email, reason),
+      LOG_CONTEXTS.AuthService.sendForgotPasswordEmail,
+      { forgotPasswordDto, user },
+    );
+    await this.loggerService.info(
+      LOG_MESSAGES.AUTH.SEND_FORGOT_PASSWORD_EMAIL.SUCCESS(user.email),
+      LOG_CONTEXTS.AuthService.sendForgotPasswordEmail,
+      { forgotPasswordDto, user },
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: RETURN_MESSAGES.OK.FORGOT_PASSWORD_EMAIL_SENT,
+    };
   }
 
   async resetPassword(userId: string, token: string, resetPasswordDto: ResetPasswordDto): Promise<SimpleMessageDto> {
@@ -402,22 +293,7 @@ export class AuthService {
     }
 
     // Check if the user exists
-    var user: User = null;
-    try {
-      user = await this.userService.findOneById(userId);
-    }
-    catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED_TO_FIND_USER(userId),
-        LOG_CONTEXTS.AuthService.resetPassword,
-        error.message,
-        { userId, token, resetPasswordDto },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneById(userId);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.AUTH.RESET_PASSWORD.USER_NOT_FOUND(userId),
@@ -430,22 +306,7 @@ export class AuthService {
       }
     }
 
-    var isValid: boolean = false;
-
-    try {
-      isValid = await this.resetPasswordService.validateResetToken(token)
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED_TO_VALIDATE_TOKEN(token),
-        LOG_CONTEXTS.AuthService.resetPassword,
-        error.message,
-        { userId, token, resetPasswordDto },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const isValid: boolean = await this.resetPasswordService.validateResetToken(token);
 
     if (!isValid) {
       await this.loggerService.warn(
@@ -471,35 +332,22 @@ export class AuthService {
       });
     }
 
-    try {
-      const newPassword: string = await hash(resetPasswordDto.password, 12);
-      user.password = newPassword;
+    const newPassword: string = await hash(resetPasswordDto.password, 12);
+    user.password = newPassword;
 
-      const resetPassword: ResetPassword = await this.resetPasswordService.findByToken(token);
+    const resetPassword: ResetPassword = await this.resetPasswordService.findByToken(token);
 
-      if (await this.userService.update(resetPassword.user.id, user)) {
-        await this.resetPasswordService.invalidateResetToken(token);
-        await this.loggerService.info(
-          LOG_MESSAGES.AUTH.RESET_PASSWORD.SUCCESS,
-          LOG_CONTEXTS.AuthService.resetPassword,
-          { userId, token, resetPasswordDto },
-        );
-        return {
-          statusCode: HttpStatus.OK,
-          message: RETURN_MESSAGES.OK.PASSWORD_RESET,
-        };
-      }
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.RESET_PASSWORD.FAILED,
+    if (await this.userService.update(resetPassword.user.id, user)) {
+      await this.resetPasswordService.invalidateResetToken(token);
+      await this.loggerService.info(
+        LOG_MESSAGES.AUTH.RESET_PASSWORD.SUCCESS,
         LOG_CONTEXTS.AuthService.resetPassword,
-        error.message,
         { userId, token, resetPasswordDto },
       );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
+      return {
+        statusCode: HttpStatus.OK,
+        message: RETURN_MESSAGES.OK.PASSWORD_RESET,
+      };
     }
   }
 
@@ -509,22 +357,7 @@ export class AuthService {
 
   async findByEmail(email: string): Promise<User> {
     // Check if the user exists
-    var user: User = null;
-    try {
-      user = await this.userService.findOneByEmail(email);
-    }
-    catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.FIND_BY_EMAIL.FAILED_TO_FIND_USER(email),
-        LOG_CONTEXTS.AuthService.findByEmail,
-        error.message,
-        { email },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneByEmail(email);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.AUTH.FIND_BY_EMAIL.USER_NOT_FOUND(email),
@@ -555,22 +388,7 @@ export class AuthService {
     }
 
     // Check if the user exists
-    var user: User = null;
-    try {
-      user = await this.userService.findOneById(userId);
-    }
-    catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.DELETE_USER.FAILED_TO_FIND_USER(userId),
-        LOG_CONTEXTS.AuthService.deleteUser,
-        error.message,
-        { userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneById(userId);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.AUTH.DELETE_USER.USER_NOT_FOUND(userId),
@@ -583,29 +401,16 @@ export class AuthService {
       });
     }
 
-    try {
-      await this.userService.remove(userId);
-      await this.loggerService.info(
-        LOG_MESSAGES.AUTH.DELETE_USER.SUCCESS(user.email),
-        LOG_CONTEXTS.AuthService.deleteUser,
-        { userId, user },
-      );
-      return {
-        statusCode: HttpStatus.OK,
-        message: RETURN_MESSAGES.OK.ACCOUNT_DELETED,
-      };
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.AUTH.DELETE_USER.FAILED_TO_DELETE_USER,
-        LOG_CONTEXTS.AuthService.deleteUser,
-        error.message,
-        { userId, user },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    await this.userService.remove(userId);
+    await this.loggerService.info(
+      LOG_MESSAGES.AUTH.DELETE_USER.SUCCESS(user.email),
+      LOG_CONTEXTS.AuthService.deleteUser,
+      { userId, user },
+    );
+    return {
+      statusCode: HttpStatus.OK,
+      message: RETURN_MESSAGES.OK.ACCOUNT_DELETED,
+    };
   }
 
 }

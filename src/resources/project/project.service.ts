@@ -1,4 +1,4 @@
-import { BadRequestException, HttpStatus, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { validate as isValidUUID } from 'uuid';
 
 import { InjectRepository } from '@nestjs/typeorm';
@@ -47,21 +47,7 @@ export class ProjectService {
     }
 
     // Check if user exists
-    let user: User = null;
-    try {
-      user = await this.userService.findOneById(userId);
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.CREATE.FAILED_TO_FIND_USER(userId),
-        LOG_CONTEXTS.ProjectService.create,
-        error.message,
-        { createProjectDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneById(userId);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.PROJECT.CREATE.USER_NOT_FOUND(createProjectDto.name, userId),
@@ -74,47 +60,34 @@ export class ProjectService {
       });
     }
 
-    try {
-      const project: Project = this.projectRepository.create({
-        ...createProjectDto,
-        createdAt: new Date(),
-      });
+    const project: Project = this.projectRepository.create({
+      ...createProjectDto,
+      createdAt: new Date(),
+    });
 
-      await this.projectRepository.save(project);
+    await this.projectRepository.save(project);
 
-      const userProjectRole: AssignUserDto = {
-        project: project,
-        user: user,
-        projectRole: ProjectRole.OWNER,
-        createdAt: new Date(),
-      }
-
-      await this.userProjectRoleRepository.save(userProjectRole);
-
-      const createdProject: Project = await this.projectRepository.findOne({
-        where: { id: project.id },
-        relations: ['userProjectRoles', 'userProjectRoles.user'],
-      });
-
-      await this.loggerService.info(
-        LOG_MESSAGES.PROJECT.CREATE.SUCCESS(user.firstname, user.lastname, createProjectDto.name),
-        LOG_CONTEXTS.ProjectService.create,
-        { createProjectDto, userId },
-      );
-
-      return createdProject;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.CREATE.FAILED_TO_CREATE_PROJECT(createProjectDto.name),
-        LOG_CONTEXTS.ProjectService.create,
-        error.message,
-        { createProjectDto, userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
+    const userProjectRole: AssignUserDto = {
+      project: project,
+      user: user,
+      projectRole: ProjectRole.OWNER,
+      createdAt: new Date(),
     }
+
+    await this.userProjectRoleRepository.save(userProjectRole);
+
+    const createdProject: Project = await this.projectRepository.findOne({
+      where: { id: project.id },
+      relations: ['userProjectRoles', 'userProjectRoles.user'],
+    });
+
+    await this.loggerService.info(
+      LOG_MESSAGES.PROJECT.CREATE.SUCCESS(user.firstname, user.lastname, createProjectDto.name),
+      LOG_CONTEXTS.ProjectService.create,
+      { createProjectDto, userId },
+    );
+
+    return createdProject;
   }
 
   async findAll(): Promise<Project[]> {
@@ -139,21 +112,7 @@ export class ProjectService {
     }
 
     // Check if user exists
-    var user: User = null;
-    try {
-      user = await this.userService.findOneById(userId);
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.FIND_ALL_BY_USER_ID.FAILED_TO_FIND_USER(userId),
-        LOG_CONTEXTS.ProjectService.findAllByUserId,
-        error.message,
-        { userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const user: User = await this.userService.findOneById(userId);
     if (!user) {
       await this.loggerService.warn(
         LOG_MESSAGES.PROJECT.FIND_ALL_BY_USER_ID.USER_NOT_FOUND(userId),
@@ -166,30 +125,17 @@ export class ProjectService {
       });
     }
 
-    try {
-      const userProjectRoles: UserProjectRole[] = await this.userProjectRoleRepository.find({
-        relations: ['user', 'project', 'project.userProjectRoles', 'project.userProjectRoles.user']
-      });
+    const userProjectRoles: UserProjectRole[] = await this.userProjectRoleRepository.find({
+      relations: ['user', 'project', 'project.userProjectRoles', 'project.userProjectRoles.user']
+    });
 
-      const userProjectRolesForUser: UserProjectRole[] = userProjectRoles.filter(userProjectRole =>
-        userProjectRole.user.id === userId
-      );
+    const userProjectRolesForUser: UserProjectRole[] = userProjectRoles.filter(userProjectRole =>
+      userProjectRole.user.id === userId
+    );
 
-      const userProjects: Project[] = userProjectRolesForUser.map(userProjectRole => userProjectRole.project);
+    const userProjects: Project[] = userProjectRolesForUser.map(userProjectRole => userProjectRole.project);
 
-      return userProjects;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.FIND_ALL_BY_USER_ID.FAILED_TO_RETRIEVE_PROJECTS,
-        LOG_CONTEXTS.ProjectService.findAllByUserId,
-        error.message,
-        { userId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return userProjects;
   }
 
   async findOneById(projectId: string): Promise<Project> {
@@ -224,24 +170,10 @@ export class ProjectService {
     }
 
     // Check if project exists
-    var project: Project = null;
-    try {
-      project = await this.projectRepository.findOne({
-        where: { id: projectId },
-        relations: ['userProjectRoles', 'userProjectRoles.user'],
-      });
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.FIND_ONE_BY_ID.FAILED_TO_FIND_PROJECT(projectId),
-        LOG_CONTEXTS.ProjectService.findOneById,
-        error.message,
-        { projectId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const project: Project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: ['userProjectRoles', 'userProjectRoles.user'],
+    });
     if (!project) {
       await this.loggerService.warn(
         LOG_MESSAGES.PROJECT.FIND_ONE_BY_ID.PROJECT_NOT_FOUND(projectId),
@@ -283,24 +215,10 @@ export class ProjectService {
     }
 
     // Check if project exists
-    var project: Project = null;
-    try {
-      project = await this.projectRepository.findOne({
-        where: { id: projectId },
-        relations: { userProjectRoles: true },
-      });
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.UPDATE.FAILED_TO_FIND_PROJECT(projectId),
-        LOG_CONTEXTS.ProjectService.update,
-        error.message,
-        { projectId, updateProjectDto },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const project: Project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: { userProjectRoles: true },
+    });
     if (!project) {
       await this.loggerService.warn(
         LOG_MESSAGES.PROJECT.UPDATE.PROJECT_NOT_FOUND(projectId),
@@ -327,33 +245,20 @@ export class ProjectService {
       });
     }
 
-    try {
-      await this.projectRepository.update(projectId, updateProjectDto);
+    await this.projectRepository.update(projectId, updateProjectDto);
 
-      var updatedProject: Project = await this.projectRepository.findOne({
-        where: { id: projectId },
-        relations: ['userProjectRoles', 'userProjectRoles.user'],
-      });
+    var updatedProject: Project = await this.projectRepository.findOne({
+      where: { id: projectId },
+      relations: ['userProjectRoles', 'userProjectRoles.user'],
+    });
 
-      await this.loggerService.info(
-        LOG_MESSAGES.PROJECT.UPDATE.SUCCESS(project.name),
-        LOG_CONTEXTS.ProjectService.update,
-        { projectId, project, updateProjectDto },
-      );
+    await this.loggerService.info(
+      LOG_MESSAGES.PROJECT.UPDATE.SUCCESS(project.name),
+      LOG_CONTEXTS.ProjectService.update,
+      { projectId, project, updateProjectDto },
+    );
 
-      return updatedProject;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.UPDATE.FAILED_TO_UPDATE_PROJECT(project.name),
-        LOG_CONTEXTS.ProjectService.update,
-        error.message,
-        { projectId, project, updateProjectDto },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    return updatedProject;
   }
 
   async remove(projectId: string): Promise<Boolean> {
@@ -371,21 +276,7 @@ export class ProjectService {
     }
 
     // Check if project exists
-    var project: Project = null;
-    try {
-      project = await this.projectRepository.findOne({ where: { id: projectId } });
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.REMOVE.FAILED_TO_FIND_PROJECT(projectId),
-        LOG_CONTEXTS.ProjectService.remove,
-        error.message,
-        { projectId },
-      );
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    const project: Project = await this.projectRepository.findOne({ where: { id: projectId } });
     if (!project) {
       await this.loggerService.warn(
         LOG_MESSAGES.PROJECT.REMOVE.PROJECT_NOT_FOUND(projectId),
@@ -398,24 +289,12 @@ export class ProjectService {
       });
     }
 
-    try {
-      await this.projectRepository.delete(projectId);
-      await this.loggerService.info(
-        LOG_MESSAGES.PROJECT.REMOVE.SUCCESS(project.name),
-        LOG_CONTEXTS.ProjectService.remove,
-        { projectId, project },
-      );
-      return true;
-    } catch (error) {
-      await this.loggerService.error(
-        LOG_MESSAGES.PROJECT.REMOVE.FAILED_TO_DELETE_PROJECT(projectId),
-        LOG_CONTEXTS.ProjectService.remove,
-        error.message,
-        { projectId, project });
-      throw new InternalServerErrorException({
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: RETURN_MESSAGES.INTERNAL_SERVER_ERROR,
-      });
-    }
+    await this.projectRepository.delete(projectId);
+    await this.loggerService.info(
+      LOG_MESSAGES.PROJECT.REMOVE.SUCCESS(project.name),
+      LOG_CONTEXTS.ProjectService.remove,
+      { projectId, project },
+    );
+    return true;
   }
 }

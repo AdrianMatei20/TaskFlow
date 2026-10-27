@@ -43,6 +43,7 @@ import { CommentResolver } from './graphql/comment/comment.resolver';
 import { join } from 'path';
 import { CacheModule } from './cache/cache.module';
 import { validationPipeProvider } from './shared/validation/validation-pipe.provider';
+import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.filter';
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { validationPipeProvider } from './shared/validation/validation-pipe.prov
   controllers: [AppController],
   providers: [
     validationPipeProvider,
+    allExceptionsFilterProvider,
     AppService,
     EmailService,
     TokenService,
