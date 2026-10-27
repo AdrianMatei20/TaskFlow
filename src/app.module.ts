@@ -45,6 +45,9 @@ import { CacheModule } from './cache/cache.module';
 import { validationPipeProvider } from './shared/validation/validation-pipe.provider';
 import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.filter';
 import { QueryCountingLogger } from './shared/query-counter/sql-query-counter';
+import { createGraphqlLoaders, GraphqlContext } from './graphql/loaders/graphql-loaders';
+import { UserService } from './resources/user/user.service';
+import { IssueService } from './resources/issue/issue.service';
 
 @Module({
   imports: [
@@ -75,13 +78,19 @@ import { QueryCountingLogger } from './shared/query-counter/sql-query-counter';
       logger: new QueryCountingLogger(), // counts queries per request when SQL_QUERY_COUNTER=true
     }),
     TypeOrmModule.forFeature([User, Project, UserProjectRole, Issue, Label, Comment, Log, ResetPassword]),
-    GraphQLModule.forRoot<ApolloDriverConfig>({
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'), // auto-generate
-      sortSchema: true,
-      playground: true, // enable GraphQL playground
-      introspection: true, // explicitly allow introspection
-      context: ({ req }) => ({ req }), // attaches user to context
+      imports: [UserModule, IssueModule],
+      inject: [UserService, IssueService],
+      useFactory: (userService: UserService, issueService: IssueService) => ({
+        autoSchemaFile: join(process.cwd(), 'src/schema.gql'), // auto-generate
+        sortSchema: true,
+        playground: true, // enable GraphQL playground
+        introspection: true, // explicitly allow introspection
+        // Runs once per request: attaches the user (req) and a fresh set of DataLoaders, so their cache lives
+        // exactly as long as the request.
+        context: ({ req }): GraphqlContext => ({ req, loaders: createGraphqlLoaders(userService, issueService) }),
+      }),
     }),
     PrometheusModule.register({
       defaultMetrics: {

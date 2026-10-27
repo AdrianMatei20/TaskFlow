@@ -167,15 +167,21 @@ export class IssueService {
     });
   }
 
-  // Used by the GraphQL Project.issues field. No access check here: the parent project query has already checked that
-  // the user can see the project. No relations either: assignee/reporter are resolved by their own field resolvers.
-  // Filters on the foreign key column directly: `find({ where: { project: { id } }, take })` would join the project
-  // table, and TypeORM answers "join + take" with two queries (distinct ids first, then the rows).
-  async findPageByProjectId(projectId: string, first: number): Promise<Issue[]> {
+  // Used by the GraphQL DataLoader behind Project.issues: the latest `first` issues of each project, for many projects in
+  // one query. A plain LIMIT would cap the whole result, so ROW_NUMBER() numbers the issues within each project and keeps
+  // the first `first` of each. No access check here: the parent project query has already checked that the user can see
+  // the project. No relations either: assignee/reporter are resolved by their own field resolvers.
+  async findPagesByProjectIds(projectIds: readonly string[], first: number): Promise<Issue[]> {
     return await this.issueRepository.createQueryBuilder('issue')
-      .where('"issue"."projectId" = :projectId', { projectId })
+      .where(`issue.id IN (
+        SELECT ranked.id FROM (
+          SELECT i.id, ROW_NUMBER() OVER (PARTITION BY i."projectId" ORDER BY i."createdAt" DESC) AS position
+          FROM issue i
+          WHERE i."projectId" IN (:...projectIds)
+        ) ranked
+        WHERE ranked.position <= :first
+      )`, { projectIds, first })
       .orderBy('issue.createdAt', 'DESC')
-      .limit(first)
       .getMany();
   }
 

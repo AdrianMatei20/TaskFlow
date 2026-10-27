@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
@@ -30,6 +30,15 @@ export class UserService {
   async findAll(): Promise<User[]> {
     const users = await this.userRepository.find();
     return Array.isArray(users) ? users : [];
+  }
+
+  // Batch lookup for the GraphQL user DataLoader: one query for many ids, and only the columns the API exposes
+  // (never the password hash).
+  async findPeopleByIds(userIds: readonly string[]): Promise<Pick<User, 'id' | 'firstname' | 'lastname'>[]> {
+    return await this.userRepository.find({
+      select: { id: true, firstname: true, lastname: true },
+      where: { id: In([...userIds]) },
+    });
   }
 
   async findOneById(userId: string): Promise<User> {

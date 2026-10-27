@@ -1,4 +1,4 @@
-import { Resolver, Query, Args, Mutation, ResolveField, Parent, Int } from '@nestjs/graphql';
+import { Resolver, Query, Args, Mutation, ResolveField, Parent, Int, Context } from '@nestjs/graphql';
 import { ProjectService } from 'src/resources/project/project.service';
 // import { Project } from './project.model';
 import { Project } from 'src/resources/project/entities/project.entity';
@@ -10,24 +10,23 @@ import { UseGuards } from '@nestjs/common';
 import { CreateProjectDto } from 'src/resources/project/dto/create-project.dto';
 import { PublicProjectDto } from 'src/resources/project/dto/public-project.dto';
 import { ProjectRoleGuard } from 'src/auth/guards/project-role.guard';
-import { IssueService } from 'src/resources/issue/issue.service';
 import { PublicIssueDto } from 'src/resources/issue/dto/public-issue.dto';
+import { GraphqlLoaders } from '../loaders/graphql-loaders';
 
 @Resolver(() => PublicProjectDto)
 @UseGuards(AuthenticatedGuard)
 export class ProjectResolver {
-    constructor(
-        private projectService: ProjectService,
-        private issueService: IssueService,
-    ) { }
+    constructor(private projectService: ProjectService) { }
 
-    // Runs once per project in the response: a list of N projects costs N issue queries (the N+1).
+    // Runs once per project in the response, but only queues the project id: the DataLoader then loads the issues of
+    // every project in the response with a single query.
     @ResolveField(() => [PublicIssueDto])
     async issues(
         @Parent() project: PublicProjectDto,
         @Args('first', { type: () => Int, defaultValue: 20 }) first: number,
+        @Context('loaders') loaders: GraphqlLoaders,
     ): Promise<PublicIssueDto[]> {
-        const issues = await this.issueService.findPageByProjectId(project.id, first);
+        const issues = await loaders.issuesByProjectId(first).load(project.id);
         return issues.map(issue => new PublicIssueDto(issue));
     }
 

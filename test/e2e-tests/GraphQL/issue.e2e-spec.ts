@@ -23,6 +23,7 @@ import { ProjectService } from "../../../src/resources/project/project.service";
 import { UserService } from "../../../src/resources/user/user.service";
 import { LoggerService } from "../../../src/logger/logger.service";
 
+import { IssueService } from "../../../src/resources/issue/issue.service";
 import { RETURN_MESSAGES } from "../../../src/constants/return-messages";
 import { getRonaldClarkRegisterUserDto, getLisaMitchellRegisterUserDto, getMichelleJohnsonRegisterUserDto } from "../../data/register-user";
 import { LogInUserDto } from "../../../src/auth/dto/log-in-user.dto";
@@ -271,6 +272,67 @@ describe('GraphQL issue (e2e)', () => {
             expect(response.status).toBe(HttpStatus.OK);
             expect(response.body.errors).not.toBeDefined();
             expect(response.body.data.issues).toHaveLength(1);
+        });
+
+        // Project.issues and Issue.assignee/reporter are resolved through per-request DataLoaders.
+        it('should resolve nested issues and people per project, batching the queries across projects', async () => {
+            const editor = await userRepository.findOne({ where: { email: getLisaMitchellRegisterUserDto().email } });
+            for (const title of ['Issue 1', 'Issue 2', 'Issue 3']) {
+                await request(app.getHttpServer())
+                    .post('/issue')
+                    .send({ projectId, title, description: 'Desc', assigneeId: editor.id })
+                    .set('Cookie', editorCookie)
+                    .expect(HttpStatus.CREATED);
+            }
+            const secondProject = await request(app.getHttpServer())
+                .post('/project')
+                .send({ name: 'GQL Second Project', description: 'Second project.' })
+                .set('Cookie', ownerCookie);
+            const secondProjectId = secondProject.body.data.id;
+            await request(app.getHttpServer())
+                .post('/issue')
+                .send({ projectId: secondProjectId, title: 'Other issue', description: 'Desc' })
+                .set('Cookie', ownerCookie)
+                .expect(HttpStatus.CREATED);
+
+            const issueBatch = jest.spyOn(app.get(IssueService), 'findPagesByProjectIds');
+            const userBatch = jest.spyOn(app.get(UserService), 'findPeopleByIds');
+
+            const query = `
+                query {
+                    userProjects {
+                        id
+                        issues(first: 2) {
+                            title
+                            assignee { firstname }
+                            reporter { firstname }
+                        }
+                    }
+                }
+            `;
+
+            const response = await request(app.getHttpServer())
+                .post('/graphql')
+                .send({ query })
+                .set('Cookie', ownerCookie);
+
+            expect(response.status).toBe(HttpStatus.OK);
+            expect(response.body.errors).not.toBeDefined();
+            const issuesByProject = Object.fromEntries(response.body.data.userProjects.map(project => [project.id, project.issues]));
+            // The limit applies per project (newest first), not to the whole result
+            expect(issuesByProject[projectId]).toEqual([
+                { title: 'Issue 3', assignee: { firstname: editor.firstname }, reporter: { firstname: editor.firstname } },
+                { title: 'Issue 2', assignee: { firstname: editor.firstname }, reporter: { firstname: editor.firstname } },
+            ]);
+            expect(issuesByProject[secondProjectId]).toEqual([
+                { title: 'Other issue', assignee: null, reporter: { firstname: getRonaldClarkRegisterUserDto().firstname } },
+            ]);
+            // One batch query for both projects' issues, one for every person across all issues
+            expect(issueBatch).toHaveBeenCalledTimes(1);
+            expect(issueBatch.mock.calls[0][0]).toEqual(expect.arrayContaining([projectId, secondProjectId]));
+            expect(userBatch).toHaveBeenCalledTimes(1);
+
+            jest.restoreAllMocks();
         });
 
     });
