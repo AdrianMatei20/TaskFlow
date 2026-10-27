@@ -82,13 +82,23 @@ export class PublicIssueDto {
     @Field(() => IssuePriority)
     readonly priority: IssuePriority;
 
+    // reporter/assignee are undefined (not null) when the relation wasn't loaded; the GraphQL field resolvers in
+    // IssueResolver then load the user from reporterId/assigneeId.
     @ApiProperty({ type: IssuePersonDto, description: 'User who reported this issue.', nullable: true })
     @Field(() => IssuePersonDto, { nullable: true })
-    readonly reporter: IssuePersonDto | null;
+    readonly reporter: IssuePersonDto | null | undefined;
+
+    @ApiProperty({ type: String, description: 'Id of the user who reported this issue.', nullable: true, example: 'af7c1fe6-d669-414e-b066-e9733f0de7a8' })
+    @Field(() => ID, { nullable: true })
+    readonly reporterId: string | null;
 
     @ApiProperty({ type: IssuePersonDto, description: 'User this issue is assigned to.', nullable: true })
     @Field(() => IssuePersonDto, { nullable: true })
-    readonly assignee: IssuePersonDto | null;
+    readonly assignee: IssuePersonDto | null | undefined;
+
+    @ApiProperty({ type: String, description: 'Id of the user this issue is assigned to.', nullable: true, example: 'af7c1fe6-d669-414e-b066-e9733f0de7a8' })
+    @Field(() => ID, { nullable: true })
+    readonly assigneeId: string | null;
 
     @ApiProperty({ type: IssueLabelDto, isArray: true, description: 'Labels attached to this issue.' })
     @Field(() => [IssueLabelDto])
@@ -108,14 +118,16 @@ export class PublicIssueDto {
 
     constructor(issue: Issue) {
         this.id = issue.id;
-        this.projectId = issue.project?.id;
+        this.projectId = issue.project?.id ?? issue.projectId;
         this.title = issue.title;
         this.description = issue.description;
         this.type = issue.type;
         this.status = issue.status;
         this.priority = issue.priority;
-        this.reporter = issue.reporter ? new IssuePersonDto(issue.reporter) : null;
-        this.assignee = issue.assignee ? new IssuePersonDto(issue.assignee) : null;
+        this.reporter = issue.reporter === undefined ? undefined : issue.reporter && new IssuePersonDto(issue.reporter);
+        this.reporterId = issue.reporter?.id ?? issue.reporterId ?? null;
+        this.assignee = issue.assignee === undefined ? undefined : issue.assignee && new IssuePersonDto(issue.assignee);
+        this.assigneeId = issue.assignee?.id ?? issue.assigneeId ?? null;
         this.labels = (issue.labels ?? []).map(label => new IssueLabelDto(label));
         this.dueDate = issue.dueDate;
         this.createdAt = issue.createdAt;

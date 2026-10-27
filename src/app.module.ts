@@ -44,6 +44,7 @@ import { join } from 'path';
 import { CacheModule } from './cache/cache.module';
 import { validationPipeProvider } from './shared/validation/validation-pipe.provider';
 import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.filter';
+import { QueryCountingLogger } from './shared/query-counter/sql-query-counter';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.
       database: process.env.PG_DB,
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
+      logger: new QueryCountingLogger(), // counts queries per request when SQL_QUERY_COUNTER=true
     }),
     TypeOrmModule.forFeature([User, Project, UserProjectRole, Issue, Label, Comment, Log, ResetPassword]),
     GraphQLModule.forRoot<ApolloDriverConfig>({

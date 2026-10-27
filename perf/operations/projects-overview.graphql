@@ -1,0 +1,15 @@
+# Admin overview: every project with its latest issues. The N+1 happens twice:
+# 1 issue query per project, then 1 user query per issue for the assignee.
+query ProjectsOverview($first: Int!) {
+  projects {
+    id
+    name
+    owner { id firstname lastname }
+    issues(first: $first) {
+      id
+      title
+      status
+      assignee { id firstname lastname }
+    }
+  }
+}

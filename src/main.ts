@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import session from 'express-session';
 import * as passport from 'passport';
 import * as dotenv from 'dotenv';
+import { isSqlQueryCounterEnabled, sqlQueryCounterMiddleware } from './shared/query-counter/sql-query-counter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -11,6 +12,11 @@ async function bootstrap() {
   dotenv.config();
 
   const NUMBER_OF_HOURS: number = 3;
+
+  // Performance measurement only: counts SQL queries per request (registered first, so session queries count too)
+  if (isSqlQueryCounterEnabled()) {
+    app.use(sqlQueryCounterMiddleware);
+  }
 
   // Initialize sessions
   app.use(

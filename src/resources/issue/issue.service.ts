@@ -167,6 +167,18 @@ export class IssueService {
     });
   }
 
+  // Used by the GraphQL Project.issues field. No access check here: the parent project query has already checked that
+  // the user can see the project. No relations either: assignee/reporter are resolved by their own field resolvers.
+  // Filters on the foreign key column directly: `find({ where: { project: { id } }, take })` would join the project
+  // table, and TypeORM answers "join + take" with two queries (distinct ids first, then the rows).
+  async findPageByProjectId(projectId: string, first: number): Promise<Issue[]> {
+    return await this.issueRepository.createQueryBuilder('issue')
+      .where('"issue"."projectId" = :projectId', { projectId })
+      .orderBy('issue.createdAt', 'DESC')
+      .limit(first)
+      .getMany();
+  }
+
   async findOneById(issueId: string, userId: string): Promise<Issue> {
     if (!isValidUUID(issueId)) {
       await this.loggerService.warn(
