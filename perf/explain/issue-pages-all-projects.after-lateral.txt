@@ -1,0 +1,18 @@
+                                                                                QUERY PLAN                                                                                
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=14330.68..14339.43 rows=3500 width=304) (actual time=4.648..4.980 rows=3133 loops=1)
+   Sort Key: i."createdAt" DESC
+   Sort Method: quicksort  Memory: 1432kB
+   Buffers: shared hit=2007
+   ->  Nested Loop  (cost=0.29..14124.65 rows=3500 width=304) (actual time=0.056..2.874 rows=3133 loops=1)
+         Buffers: shared hit=2004
+         ->  Function Scan on unnest p  (cost=0.00..3.50 rows=350 width=16) (actual time=0.034..0.069 rows=350 loops=1)
+         ->  Limit  (cost=0.29..40.15 rows=10 width=304) (actual time=0.003..0.006 rows=9 loops=350)
+               Buffers: shared hit=2004
+               ->  Index Scan Backward using "IDX_issue_project_created_at" on issue i  (cost=0.29..123.85 rows=31 width=304) (actual time=0.002..0.005 rows=9 loops=350)
+                     Index Cond: ("projectId" = p.id)
+                     Buffers: shared hit=2004
+ Planning Time: 0.597 ms
+ Execution Time: 5.221 ms
+(14 rows)
+

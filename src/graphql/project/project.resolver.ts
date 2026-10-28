@@ -1,4 +1,4 @@
-import { Resolver, Query, Args, Mutation } from '@nestjs/graphql';
+import { Resolver, Query, Args, Mutation, ResolveField, Parent, Context } from '@nestjs/graphql';
 import { ProjectService } from 'src/resources/project/project.service';
 // import { Project } from './project.model';
 import { Project } from 'src/resources/project/entities/project.entity';
@@ -10,20 +10,39 @@ import { UseGuards } from '@nestjs/common';
 import { CreateProjectDto } from 'src/resources/project/dto/create-project.dto';
 import { PublicProjectDto } from 'src/resources/project/dto/public-project.dto';
 import { ProjectRoleGuard } from 'src/auth/guards/project-role.guard';
+import { PublicIssueDto } from 'src/resources/issue/dto/public-issue.dto';
+import { GraphqlLoaders } from '../loaders/graphql-loaders';
+import { IssuesPageArgs, issuesPageComplexity } from './issues-page.args';
+import { UNPAGINATED_LIST_ESTIMATE } from '../limits/query-limits';
 
-@Resolver(() => Project)
+// Unpaginated lists: the complexity estimator can't know their size, so it assumes UNPAGINATED_LIST_ESTIMATE items.
+const unpaginatedListComplexity = ({ childComplexity }: { childComplexity: number }) => UNPAGINATED_LIST_ESTIMATE * childComplexity;
+
+@Resolver(() => PublicProjectDto)
 @UseGuards(AuthenticatedGuard)
 export class ProjectResolver {
     constructor(private projectService: ProjectService) { }
 
-    @Query(() => [PublicProjectDto])
+    // Runs once per project in the response, but only queues the project id: the DataLoader then loads the issues of
+    // every project in the response with a single query.
+    @ResolveField(() => [PublicIssueDto], { complexity: issuesPageComplexity })
+    async issues(
+        @Parent() project: PublicProjectDto,
+        @Args() { first }: IssuesPageArgs,
+        @Context('loaders') loaders: GraphqlLoaders,
+    ): Promise<PublicIssueDto[]> {
+        const issues = await loaders.issuesByProjectId(first).load(project.id);
+        return issues.map(issue => new PublicIssueDto(issue));
+    }
+
+    @Query(() => [PublicProjectDto], { complexity: unpaginatedListComplexity })
     @UseGuards(GlobalAdminGuard)
     async projects(): Promise<PublicProjectDto[]> {
         const projects: Project[] = await this.projectService.findAll();
         return projects.map(project => new PublicProjectDto(project));
     }
 
-    @Query(() => [PublicProjectDto])
+    @Query(() => [PublicProjectDto], { complexity: unpaginatedListComplexity })
     async userProjects(
         @CurrentUserDecorator() user: CurrentUser,
     ): Promise<PublicProjectDto[]> {

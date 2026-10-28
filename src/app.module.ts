@@ -44,6 +44,13 @@ import { join } from 'path';
 import { CacheModule } from './cache/cache.module';
 import { validationPipeProvider } from './shared/validation/validation-pipe.provider';
 import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.filter';
+import { QueryCountingLogger } from './shared/query-counter/sql-query-counter';
+import { createGraphqlLoaders, GraphqlContext } from './graphql/loaders/graphql-loaders';
+import { createDepthLimitRule } from './graphql/limits/depth-limit.rule';
+import { ComplexityPlugin } from './graphql/limits/complexity.plugin';
+import { MAX_QUERY_DEPTH } from './graphql/limits/query-limits';
+import { UserService } from './resources/user/user.service';
+import { IssueService } from './resources/issue/issue.service';
 
 @Module({
   imports: [
@@ -71,15 +78,28 @@ import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.
       database: process.env.PG_DB,
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: true,
+      logger: new QueryCountingLogger(), // counts queries per request when SQL_QUERY_COUNTER=true
+      // Migrations run before `synchronize`, so indexes are first built CONCURRENTLY by a migration instead of with a
+      // write-blocking CREATE INDEX by synchronize. Postgres only: the e2e tests use SQLite.
+      migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
+      migrationsRun: process.env.DB_TYPE === 'postgres',
+      migrationsTransactionMode: 'each', // lets a migration opt out of transactions (needed for CONCURRENTLY)
     }),
     TypeOrmModule.forFeature([User, Project, UserProjectRole, Issue, Label, Comment, Log, ResetPassword]),
-    GraphQLModule.forRoot<ApolloDriverConfig>({
+    GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'), // auto-generate
-      sortSchema: true,
-      playground: true, // enable GraphQL playground
-      introspection: true, // explicitly allow introspection
-      context: ({ req }) => ({ req }), // attaches user to context
+      imports: [UserModule, IssueModule],
+      inject: [UserService, IssueService],
+      useFactory: (userService: UserService, issueService: IssueService) => ({
+        autoSchemaFile: join(process.cwd(), 'src/schema.gql'), // auto-generate
+        sortSchema: true,
+        playground: true, // enable GraphQL playground
+        introspection: true, // explicitly allow introspection
+        validationRules: [createDepthLimitRule(MAX_QUERY_DEPTH)], // the complexity limit is ComplexityPlugin (needs variables)
+        // Runs once per request: attaches the user (req) and a fresh set of DataLoaders, so their cache lives
+        // exactly as long as the request.
+        context: ({ req }): GraphqlContext => ({ req, loaders: createGraphqlLoaders(userService, issueService) }),
+      }),
     }),
     PrometheusModule.register({
       defaultMetrics: {
@@ -93,6 +113,7 @@ import { allExceptionsFilterProvider } from './shared/exceptions/all-exceptions.
   providers: [
     validationPipeProvider,
     allExceptionsFilterProvider,
+    ComplexityPlugin,
     AppService,
     EmailService,
     TokenService,

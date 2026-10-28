@@ -1,0 +1,15 @@
+# One project, one page of its issues, with the people on each issue.
+# Without batching: 1 issue query, then 1 user query per issue per person field.
+query ProjectIssues($id: String!, $first: Int!) {
+  project(id: $id) {
+    id
+    name
+    issues(first: $first) {
+      id
+      title
+      status
+      assignee { id firstname lastname }
+      reporter { id firstname lastname }
+    }
+  }
+}

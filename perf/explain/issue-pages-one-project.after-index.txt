@@ -1,0 +1,35 @@
+                                                                                    QUERY PLAN                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=2024.30..2025.16 rows=346 width=304) (actual time=11.751..11.764 rows=50 loops=1)
+   Sort Key: issue."createdAt" DESC
+   Sort Method: quicksort  Memory: 45kB
+   Buffers: shared hit=940
+   ->  Hash Semi Join  (cost=1028.60..2009.70 rows=346 width=304) (actual time=2.546..11.665 rows=50 loops=1)
+         Hash Cond: (issue.id = ranked.id)
+         Buffers: shared hit=937
+         ->  Seq Scan on issue  (cost=0.00..950.59 rows=10159 width=304) (actual time=0.008..1.811 rows=10159 loops=1)
+               Buffers: shared hit=849
+         ->  Hash  (cost=1024.27..1024.27 rows=346 width=16) (actual time=2.061..2.064 rows=50 loops=1)
+               Buckets: 1024  Batches: 1  Memory Usage: 11kB
+               Buffers: shared hit=88
+               ->  Subquery Scan on ranked  (cost=990.57..1024.27 rows=346 width=16) (actual time=1.148..2.044 rows=50 loops=1)
+                     Filter: (ranked."position" <= 50)
+                     Rows Removed by Filter: 987
+                     Buffers: shared hit=88
+                     ->  WindowAgg  (cost=990.57..1011.31 rows=1037 width=48) (actual time=1.146..1.937 rows=1037 loops=1)
+                           Buffers: shared hit=88
+                           ->  Sort  (cost=990.57..993.16 rows=1037 width=40) (actual time=1.136..1.219 rows=1037 loops=1)
+                                 Sort Key: i."createdAt" DESC
+                                 Sort Method: quicksort  Memory: 130kB
+                                 Buffers: shared hit=88
+                                 ->  Bitmap Heap Scan on issue i  (cost=32.32..938.62 rows=1037 width=40) (actual time=0.111..0.702 rows=1037 loops=1)
+                                       Recheck Cond: ("projectId" = 'db800e65-f372-481f-821d-07a614e5bd65'::uuid)
+                                       Heap Blocks: exact=81
+                                       Buffers: shared hit=88
+                                       ->  Bitmap Index Scan on "IDX_issue_project_created_at"  (cost=0.00..32.06 rows=1037 width=0) (actual time=0.094..0.094 rows=1037 loops=1)
+                                             Index Cond: ("projectId" = 'db800e65-f372-481f-821d-07a614e5bd65'::uuid)
+                                             Buffers: shared hit=7
+ Planning Time: 8.248 ms
+ Execution Time: 11.942 ms
+(31 rows)
+

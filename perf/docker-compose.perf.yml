@@ -1,0 +1,14 @@
+# Runs the app inside the Docker network for load tests, next to Postgres and Redis.
+#
+#   docker compose -f docker-compose.yml -f perf/docker-compose.perf.yml up -d --build nestjs-app
+#
+# Why: on Docker Desktop for Windows/macOS, an app running on the host reaches Postgres through port forwarding,
+# which added ~50 ms to every parameterized query here (0.4 ms inside the network). That penalty multiplies with the
+# number of queries, so it would exaggerate exactly the N+1 cost being measured.
+services:
+  nestjs-app:
+    environment:
+      - SQL_QUERY_COUNTER=true
+    # Published on 3002 so it doesn't clash with a dev server on 3001. k6 itself joins the Docker network.
+    ports: !override
+      - '3002:3001'

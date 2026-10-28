@@ -1,0 +1,32 @@
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=2061.66..2062.52 rows=346 width=304) (actual time=4.972..4.979 rows=50 loops=1)
+   Sort Key: issue."createdAt" DESC
+   Sort Method: quicksort  Memory: 45kB
+   Buffers: shared hit=1701
+   ->  Hash Semi Join  (cost=1065.96..2047.07 rows=346 width=304) (actual time=3.037..4.921 rows=50 loops=1)
+         Hash Cond: (issue.id = ranked.id)
+         Buffers: shared hit=1698
+         ->  Seq Scan on issue  (cost=0.00..950.59 rows=10159 width=304) (actual time=0.003..0.749 rows=10159 loops=1)
+               Buffers: shared hit=849
+         ->  Hash  (cost=1061.63..1061.63 rows=346 width=16) (actual time=2.877..2.878 rows=50 loops=1)
+               Buckets: 1024  Batches: 1  Memory Usage: 11kB
+               Buffers: shared hit=849
+               ->  Subquery Scan on ranked  (cost=1027.93..1061.63 rows=346 width=16) (actual time=2.433..2.866 rows=50 loops=1)
+                     Filter: (ranked."position" <= 50)
+                     Rows Removed by Filter: 987
+                     Buffers: shared hit=849
+                     ->  WindowAgg  (cost=1027.93..1048.67 rows=1037 width=48) (actual time=2.432..2.811 rows=1037 loops=1)
+                           Buffers: shared hit=849
+                           ->  Sort  (cost=1027.93..1030.52 rows=1037 width=40) (actual time=2.425..2.469 rows=1037 loops=1)
+                                 Sort Key: i."createdAt" DESC
+                                 Sort Method: quicksort  Memory: 130kB
+                                 Buffers: shared hit=849
+                                 ->  Seq Scan on issue i  (cost=0.00..975.99 rows=1037 width=40) (actual time=0.017..2.215 rows=1037 loops=1)
+                                       Filter: ("projectId" = 'db800e65-f372-481f-821d-07a614e5bd65'::uuid)
+                                       Rows Removed by Filter: 9122
+                                       Buffers: shared hit=849
+ Planning Time: 0.483 ms
+ Execution Time: 5.098 ms
+(28 rows)
+
